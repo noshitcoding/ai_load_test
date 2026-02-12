@@ -113,10 +113,24 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
 <div class="container">
   <div class="toolbar">
     <button class="bp" onclick="addCard()">+ Modell hinzufügen</button>
+    <select id="presetSelect" style="width:auto;min-width:220px">
+      <option value="">Benchmark-Preset wählen…</option>
+      <option value="latency">Latency (stabil, wenig Last)</option>
+      <option value="throughput">Throughput (max Last)</option>
+      <option value="priority">Priority-Nachweis (Key1 vs Key2)</option>
+    </select>
+    <button class="bo" onclick="applyPresetFromUI()">⚙️ Preset anwenden</button>
     <div class="sep"></div>
     <button class="bs" onclick="startAll()">▶ Alle starten</button>
     <button class="bd" onclick="stopAll()">■ Alle stoppen</button>
     <button class="bo" onclick="resetAll()">↺ Reset</button>
+    <div class="sep"></div>
+    <select id="profileSelect" style="width:auto;min-width:220px">
+      <option value="">Benchmark-Profil…</option>
+    </select>
+    <button class="bo" onclick="saveBenchmarkProfile()">💾 Profil speichern</button>
+    <button class="bo" onclick="loadBenchmarkProfile()">📂 Profil laden</button>
+    <button class="bo" onclick="deleteBenchmarkProfile()">🗑 Profil löschen</button>
     <div class="sep"></div>
     <button class="bo" onclick="exportJSON()">📥 Export</button>
     <button class="bo" onclick="importJSON()">📤 Import</button>
@@ -161,12 +175,44 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
 
 <script>
 var NX=0,C={},LOG=[],SORT={col:null,asc:true};
+var PROFILE_KEY='llm_benchmark_profiles_v1';
 var COLORS=['#4f8ff7','#22c55e','#f59e0b','#ef4444','#a855f7','#06b6d4','#ec4899','#84cc16','#fb923c','#14b8a6'];
 function $$(id){return document.getElementById(id)}
 function fms(v){if(v===null||v===undefined||isNaN(v))return'–';return v<1000?Math.round(v)+'ms':(v/1000).toFixed(2)+'s'}
 function fn(v,d){return(v===null||v===undefined||isNaN(v))?'–':(d!==undefined?v.toFixed(d):v)}
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+
+var BENCHMARK_PRESETS={
+  latency:function(base){
+    return [{
+      url:base.url,key:base.key,model:base.model||'gpt-oss:20b',
+      sysPrompt:'',prompt:'Antworte kurz und präzise in einem Satz.',
+      conc:1,batch:1,delay:200,total:60,maxTok:64,temp:0.2,priority:0,stream:false
+    }];
+  },
+  throughput:function(base){
+    return [{
+      url:base.url,key:base.key,model:base.model||'gpt-oss:20b',
+      sysPrompt:'',prompt:'Erzeuge eine detaillierte Antwort mit mehreren Punkten.',
+      conc:16,batch:4,delay:0,total:0,maxTok:256,temp:0.7,priority:0,stream:true
+    }];
+  },
+  priority:function(base){
+    return [
+      {
+        url:base.url,key:base.key1||base.key,model:base.model||'gpt-oss:20b',
+        sysPrompt:'',prompt:'Schreibe eine kompakte Zusammenfassung in 5 Stichpunkten.',
+        conc:8,batch:2,delay:0,total:300,maxTok:160,temp:0.6,priority:0,stream:true
+      },
+      {
+        url:base.url,key:base.key2||base.key,model:base.model||'gpt-oss:20b',
+        sysPrompt:'',prompt:'Schreibe eine kompakte Zusammenfassung in 5 Stichpunkten.',
+        conc:8,batch:2,delay:0,total:300,maxTok:160,temp:0.6,priority:5,stream:true
+      }
+    ];
+  }
+};
 
 function toast(msg,type){
   var t=document.createElement('div');t.className='toast t-'+(type||'ok');t.textContent=msg;
@@ -373,6 +419,84 @@ function startAll(){for(var id in C)doStart(+id)}
 function stopAll(){for(var id in C)doStop(+id)}
 function resetAll(){for(var id in C)doReset(+id);LOG=[];toast('Alles zurückgesetzt')}
 function clearLog(){LOG=[];toast('Log geleert')}
+
+function getFirstCardBase(){
+  var ids=Object.keys(C);
+  if(ids.length===0)return{url:'http://localhost:4000/v1',key:'sk-1234',model:'gpt-oss:20b'};
+  var cfg=getConf(+ids[0]);
+  var key2=ids.length>1?getConf(+ids[1]).key:cfg.key;
+  return{url:cfg.url,key:cfg.key,key1:cfg.key,key2:key2,model:cfg.model||'gpt-oss:20b'};
+}
+
+function clearAllCards(){
+  var ids=Object.keys(C);
+  for(var i=0;i<ids.length;i++)removeCard(+ids[i]);
+}
+
+function applyPresetFromUI(){
+  var preset=$$('presetSelect').value;
+  if(!preset||!BENCHMARK_PRESETS[preset]){toast('Preset wählen','err');return}
+  var base=getFirstCardBase();
+  var cards=BENCHMARK_PRESETS[preset](base);
+  clearAllCards();
+  for(var i=0;i<cards.length;i++)addCard(cards[i]);
+  toast('Preset geladen: '+preset);
+}
+
+function getProfiles(){
+  try{return JSON.parse(localStorage.getItem(PROFILE_KEY)||'{}')}catch(e){return{}};
+}
+
+function setProfiles(p){
+  localStorage.setItem(PROFILE_KEY,JSON.stringify(p));
+}
+
+function refreshProfileSelect(){
+  var el=$$('profileSelect');
+  if(!el)return;
+  var p=getProfiles();
+  var names=Object.keys(p).sort();
+  var html='<option value="">Benchmark-Profil…</option>';
+  for(var i=0;i<names.length;i++)html+='<option value="'+esc(names[i])+'">'+esc(names[i])+'</option>';
+  el.innerHTML=html;
+}
+
+function saveBenchmarkProfile(){
+  var name=(prompt('Profilname speichern als:')||'').trim();
+  if(!name){toast('Kein Profilname','err');return}
+  var ids=Object.keys(C);
+  if(ids.length===0){toast('Keine Karten vorhanden','err');return}
+  var cards=[];
+  for(var i=0;i<ids.length;i++)cards.push(getConf(+ids[i]));
+  var profiles=getProfiles();
+  profiles[name]={createdAt:new Date().toISOString(),cards:cards};
+  setProfiles(profiles);
+  refreshProfileSelect();
+  $$('profileSelect').value=name;
+  toast('Profil gespeichert: '+name);
+}
+
+function loadBenchmarkProfile(){
+  var name=$$('profileSelect').value;
+  if(!name){toast('Profil wählen','err');return}
+  var profiles=getProfiles();
+  var p=profiles[name];
+  if(!p||!p.cards||!p.cards.length){toast('Profil leer/ungültig','err');return}
+  clearAllCards();
+  for(var i=0;i<p.cards.length;i++)addCard(p.cards[i]);
+  toast('Profil geladen: '+name);
+}
+
+function deleteBenchmarkProfile(){
+  var name=$$('profileSelect').value;
+  if(!name){toast('Profil wählen','err');return}
+  var profiles=getProfiles();
+  if(!profiles[name]){toast('Profil nicht gefunden','err');return}
+  delete profiles[name];
+  setProfiles(profiles);
+  refreshProfileSelect();
+  toast('Profil gelöscht: '+name);
+}
 
 // ════════════════════════════════════════════════
 // WORKER LOOP (with batch support)
@@ -792,6 +916,7 @@ document.addEventListener('keydown',function(e){
 });
 
 setInterval(render,400);render();
+refreshProfileSelect();
 </script>
 </body>
 </html>
