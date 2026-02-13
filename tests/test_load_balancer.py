@@ -28,6 +28,7 @@ def make_settings(
         max_connections=200,
         max_keepalive=50,
         default_timeout_seconds=30.0,
+        cache_max_entries=1000,
         log_level="INFO",
     )
 
@@ -652,3 +653,74 @@ def test_db_token_routes_to_mapped_endpoint_and_sets_priority(
     # request_priority from client token is injected if request has none
     assert seen_priority
     assert seen_priority[0] == 200
+
+
+def test_token_min_traffic_cache_rest(tmp_path: Path) -> None:
+    upstream_calls = 0
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        nonlocal upstream_calls
+        upstream_calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {
+                    "prompt_tokens": 3,
+                    "completion_tokens": 7,
+                    "total_tokens": 10,
+                },
+            },
+            headers={"content-type": "application/json"},
+        )
+
+    app = create_app(
+        settings=make_settings(
+            tmp_path / "lb.db", client_tokens=set()
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with TestClient(app) as c:
+        create_endpoint(c, "ep-cache", "key-cache")
+
+        r = c.post(
+            "/admin/api/tokens",
+            headers=admin_headers(),
+            json={
+                "name": "quota-token",
+                "token": "quota-token-value",
+                "min_traffic_percent": 50,
+            },
+        )
+        assert r.status_code == 200, r.text
+
+        headers = {
+            "Authorization": "Bearer quota-token-value",
+        }
+        payload = {
+            "model": "demo",
+            "messages": [{"role": "user", "content": "same prompt"}],
+            "stream": False,
+        }
+
+        first = c.post("/v1/chat/completions", headers=headers, json=payload)
+        assert first.status_code == 200
+        assert first.headers.get("X-LB-Cache") == "MISS"
+
+        second = c.post("/v1/chat/completions", headers=headers, json=payload)
+        assert second.status_code == 200
+        assert second.headers.get("X-LB-Cache") == "HIT"
+
+        miss_payload = {
+            "model": "demo",
+            "messages": [{"role": "user", "content": "new uncached prompt"}],
+            "stream": False,
+        }
+        third = c.post(
+            "/v1/chat/completions", headers=headers, json=miss_payload
+        )
+        assert third.status_code == 503
+        assert "cache miss" in third.text.lower()
+
+    assert upstream_calls == 1

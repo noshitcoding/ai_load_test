@@ -8,6 +8,7 @@ in the n8n-style admin UI.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -49,6 +51,7 @@ class AppSettings:
     max_connections: int
     max_keepalive: int
     default_timeout_seconds: float
+    cache_max_entries: int
     log_level: str
 
 
@@ -222,6 +225,7 @@ class SQLiteStore:
                     token      TEXT    NOT NULL UNIQUE,
                     preferred_endpoint_id INTEGER,
                     request_priority INTEGER NOT NULL DEFAULT 0,
+                    min_traffic_percent REAL NOT NULL DEFAULT 0,
                     created_at TEXT    NOT NULL
                 );
 
@@ -239,6 +243,7 @@ class SQLiteStore:
                 "completion_tokens_total INTEGER NOT NULL DEFAULT 0",
                 "preferred_endpoint_id INTEGER",
                 "request_priority INTEGER NOT NULL DEFAULT 0",
+                "min_traffic_percent REAL NOT NULL DEFAULT 0",
             ]:
                 try:
                     self._conn.execute(
@@ -460,19 +465,21 @@ class SQLiteStore:
         token: Optional[str] = None,
         preferred_endpoint_id: Optional[int] = None,
         request_priority: int = 0,
+        min_traffic_percent: float = 0,
     ) -> dict[str, Any]:
         tok = (token or "").strip() or ("ct-" + secrets.token_urlsafe(32))
         now = now_iso()
         with self._lock:
             cur = self._conn.execute(
                 "INSERT INTO client_tokens("
-                "name, token, preferred_endpoint_id, request_priority, created_at"
-                ") VALUES(?,?,?,?,?)",
+                "name, token, preferred_endpoint_id, request_priority, min_traffic_percent, created_at"
+                ") VALUES(?,?,?,?,?,?)",
                 (
                     name,
                     tok,
                     preferred_endpoint_id,
                     int(request_priority),
+                    float(min_traffic_percent),
                     now,
                 ),
             )
@@ -522,6 +529,7 @@ class SQLiteStore:
             "pos_y",
             "preferred_endpoint_id",
             "request_priority",
+            "min_traffic_percent",
         }
         parts: list[str] = []
         vals: list[Any] = []
@@ -564,6 +572,19 @@ class SQLiteStore:
                 (prompt_tokens, completion_tokens, tid),
             )
             self._conn.commit()
+
+    def get_client_token_traffic_stats(self, tid: int) -> tuple[int, int]:
+        with self._lock:
+            total_row = self._conn.execute(
+                "SELECT COALESCE(SUM(total_requests),0) AS total FROM client_tokens"
+            ).fetchone()
+            token_row = self._conn.execute(
+                "SELECT total_requests FROM client_tokens WHERE id=?",
+                (tid,),
+            ).fetchone()
+        total = int(total_row["total"]) if total_row else 0
+        token_total = int(token_row["total_requests"]) if token_row else 0
+        return total, token_total
 
     def reset_client_token_stats(self) -> None:
         with self._lock:
@@ -620,6 +641,7 @@ class ClientTokenCreate(BaseModel):
     pos_y: float = Field(default=100)
     preferred_endpoint_id: Optional[int] = Field(default=None, ge=1)
     request_priority: int = Field(default=0, ge=0, le=1000)
+    min_traffic_percent: float = Field(default=0, ge=0, le=100)
 
 
 class ClientTokenPatch(BaseModel):
@@ -628,6 +650,7 @@ class ClientTokenPatch(BaseModel):
     pos_y: Optional[float] = None
     preferred_endpoint_id: Optional[int] = Field(default=None, ge=1)
     request_priority: Optional[int] = Field(default=None, ge=0, le=1000)
+    min_traffic_percent: Optional[float] = Field(default=None, ge=0, le=100)
 
 
 # ── Routing Engine ────────────────────────────────────────────────────────────
@@ -795,6 +818,9 @@ class LoadBalancerEngine:
         if n > 0:
             self._tok_window.append((time.time(), n))
 
+    def note_request(self) -> None:
+        self._req_window.append(time.time())
+
     def note_client_request(self, token_id: int) -> None:
         w = self._client_req_window.setdefault(token_id, [])
         w.append(time.time())
@@ -859,6 +885,9 @@ def load_settings() -> AppSettings:
         default_timeout_seconds=max(
             5.0, float(os.getenv("LB_DEFAULT_TIMEOUT_SECONDS", "120"))
         ),
+        cache_max_entries=max(
+            100, int(os.getenv("LB_CACHE_MAX_ENTRIES", "5000"))
+        ),
         log_level=os.getenv("LB_LOG_LEVEL", "INFO").upper(),
     )
 
@@ -872,6 +901,47 @@ def create_app(
 
     store = SQLiteStore(cfg.db_path)
     engine = LoadBalancerEngine(store, cfg, transport=transport)
+    cache_lock = asyncio.Lock()
+    response_cache: OrderedDict[str, tuple[int, bytes, str, str]] = (
+        OrderedDict()
+    )
+
+    def build_cache_key(
+        client_token_id: int,
+        mapped_endpoint_id: Optional[int],
+        body: bytes,
+    ) -> str:
+        h = hashlib.sha256()
+        h.update(str(client_token_id).encode("utf-8"))
+        h.update(b"|")
+        h.update(
+            str(mapped_endpoint_id).encode("utf-8")
+            if mapped_endpoint_id is not None
+            else b"-"
+        )
+        h.update(b"|")
+        h.update(body)
+        return h.hexdigest()
+
+    async def cache_get(
+        key: str,
+    ) -> Optional[tuple[int, bytes, str, str]]:
+        async with cache_lock:
+            val = response_cache.get(key)
+            if val is None:
+                return None
+            response_cache.move_to_end(key)
+            return val
+
+    async def cache_put(
+        key: str,
+        val: tuple[int, bytes, str, str],
+    ) -> None:
+        async with cache_lock:
+            response_cache[key] = val
+            response_cache.move_to_end(key)
+            while len(response_cache) > cfg.cache_max_entries:
+                response_cache.popitem(last=False)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -985,15 +1055,11 @@ def create_app(
         mapped_eid: Optional[int] = None
         if client_tok and client_tok.get("preferred_endpoint_id") is not None:
             mapped_eid = int(client_tok["preferred_endpoint_id"])
-        ep = await engine.acquire(mapped_eid)
-        eid = int(ep["id"])
-        ep_name = str(ep["name"])
 
         raw = await request.body()
         try:
             body = json.loads(raw) if raw else {}
         except json.JSONDecodeError:
-            await engine.release(eid)
             raise HTTPException(400, "invalid JSON body")
 
         if (
@@ -1005,6 +1071,57 @@ def create_app(
             raw = json.dumps(body).encode("utf-8")
 
         stream = bool(body.get("stream", False))
+        min_share = float(client_tok.get("min_traffic_percent", 0)) if client_tok else 0
+        cache_key: Optional[str] = None
+        cache_only = False
+        if client_tid is not None and min_share > 0:
+            total_req, token_req = await asyncio.to_thread(
+                store.get_client_token_traffic_stats,
+                client_tid,
+            )
+            share = (token_req / total_req * 100) if total_req > 0 else 0.0
+            cache_only = total_req > 0 and share >= min_share
+            if stream and cache_only:
+                raise HTTPException(
+                    409,
+                    "cache-only traffic requires non-stream requests",
+                )
+            if not stream:
+                cache_key = build_cache_key(client_tid, mapped_eid, raw)
+
+        if cache_only and cache_key:
+            cached = await cache_get(cache_key)
+            if not cached:
+                raise HTTPException(
+                    503,
+                    "cache miss for over-quota token traffic",
+                )
+            c_status, c_body, c_media, c_ep = cached
+            prompt_t, comp_t = extract_usage(c_body)
+            if client_tid is not None:
+                await asyncio.to_thread(
+                    store.record_client_token_usage,
+                    client_tid,
+                    prompt_t,
+                    comp_t,
+                )
+                engine.note_client_request(client_tid)
+            engine.note_tokens(prompt_t + comp_t)
+            engine.note_request()
+            return Response(
+                content=c_body,
+                status_code=c_status,
+                headers={
+                    "X-LB-Cache": "HIT",
+                    "X-LB-Endpoint": c_ep,
+                },
+                media_type=c_media,
+            )
+
+        ep = await engine.acquire(mapped_eid)
+        eid = int(ep["id"])
+        ep_name = str(ep["name"])
+
         headers = build_upstream_headers(request, ep)
         url = join_url(str(ep["base_url"]), "/chat/completions")
         timeout = float(
@@ -1024,7 +1141,24 @@ def create_app(
                 await finish_request(
                     eid, up.status_code, lat, pt, ct, client_tid
                 )
+                if (
+                    cache_key
+                    and 200 <= up.status_code < 300
+                    and up.headers.get("content-type")
+                ):
+                    await cache_put(
+                        cache_key,
+                        (
+                            up.status_code,
+                            bytes(up.content),
+                            up.headers.get(
+                                "content-type", "application/json"
+                            ),
+                            ep_name,
+                        ),
+                    )
                 rh = filtered_response_headers(up.headers, ep_name)
+                rh["X-LB-Cache"] = "MISS"
                 return Response(
                     content=up.content,
                     status_code=up.status_code,
@@ -1249,6 +1383,7 @@ def create_app(
                 if preferred_eid is not None
                 else None,
                 "request_priority": t.get("request_priority", 0),
+                "min_traffic_percent": t.get("min_traffic_percent", 0),
             })
         return JSONResponse(
             {
@@ -1353,6 +1488,7 @@ def create_app(
                 "completion_tokens_total": t.get("completion_tokens_total", 0),
                 "preferred_endpoint_id": preferred_eid,
                 "request_priority": t.get("request_priority", 0),
+                "min_traffic_percent": t.get("min_traffic_percent", 0),
             })
         return JSONResponse(safe)
 
@@ -1374,6 +1510,7 @@ def create_app(
                 payload.token,
                 payload.preferred_endpoint_id,
                 payload.request_priority,
+                payload.min_traffic_percent,
             )
             # Update position if provided
             if tok and (payload.pos_x != 80 or payload.pos_y != 100):

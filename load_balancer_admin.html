@@ -696,6 +696,10 @@ function renderTokenList(){
           <label>Source-Prio</label>
           <input id="tokPrio${t.id}" type="number" min="0" max="1000" value="${t.request_priority||0}"/>
         </div>
+        <div class="sb-field" style="max-width:120px">
+          <label>Min % Traffic</label>
+          <input id="tokMin${t.id}" type="number" min="0" max="100" step="0.1" value="${t.min_traffic_percent||0}"/>
+        </div>
       </div>
       <div class="sb-row" style="margin-top:2px;justify-content:flex-end">
         <button class="sb-btn" style="font-size:10px;padding:3px 8px" onclick="saveClientTokenRoute(${t.id}, this)">Route speichern</button>
@@ -725,9 +729,11 @@ async function createClientToken(){
 async function saveClientTokenRoute(tid, btn){
   const epRaw = $(`tokEp${tid}`).value;
   const prio = parseInt($(`tokPrio${tid}`).value) || 0;
+  const minPct = parseFloat($(`tokMin${tid}`).value) || 0;
   const payload = {
     preferred_endpoint_id: epRaw ? parseInt(epRaw, 10) : null,
     request_priority: prio,
+    min_traffic_percent: minPct,
   };
   const prev = btn ? btn.textContent : '';
   try{
