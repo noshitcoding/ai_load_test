@@ -724,3 +724,82 @@ def test_token_min_traffic_cache_rest(tmp_path: Path) -> None:
         assert "cache miss" in third.text.lower()
 
     assert upstream_calls == 1
+
+
+def test_priority_mode_with_prioritized_input_token(tmp_path: Path) -> None:
+    seen_auth: list[str] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen_auth.append(req.headers.get("Authorization", ""))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+            headers={"content-type": "application/json"},
+        )
+
+    app = create_app(
+        settings=make_settings(
+            tmp_path / "lb.db", client_tokens=set()
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with TestClient(app) as c:
+        create_endpoint(c, "primary", "key-primary", priority_order=1)
+        create_endpoint(c, "secondary", "key-secondary", priority_order=10)
+
+        r = c.post(
+            "/admin/api/tokens",
+            headers=admin_headers(),
+            json={"name": "prio-in", "token": "prio-in-token"},
+        )
+        assert r.status_code == 200, r.text
+        prio_tok_id = r.json()["id"]
+
+        r = c.post(
+            "/admin/api/tokens",
+            headers=admin_headers(),
+            json={"name": "other-in", "token": "other-in-token"},
+        )
+        assert r.status_code == 200, r.text
+
+        r = c.patch(
+            "/admin/api/routing",
+            headers=admin_headers(),
+            json={
+                "routing_mode": "priority",
+                "priority_input_token_id": prio_tok_id,
+            },
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["routing_mode"] == "priority"
+        assert r.json()["priority_input_token_id"] == prio_tok_id
+
+        payload = {
+            "model": "demo",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": False,
+        }
+
+        # Priorisierter Eingang -> primary endpoint
+        rp = c.post(
+            "/v1/chat/completions",
+            headers={"Authorization": "Bearer prio-in-token"},
+            json=payload,
+        )
+        assert rp.status_code == 200, rp.text
+
+        # Anderer Eingang -> bevorzugt secondary endpoint
+        ro = c.post(
+            "/v1/chat/completions",
+            headers={"Authorization": "Bearer other-in-token"},
+            json=payload,
+        )
+        assert ro.status_code == 200, ro.text
+
+    assert len(seen_auth) >= 2
+    assert seen_auth[0] == "Bearer key-primary"
+    assert seen_auth[1] == "Bearer key-secondary"

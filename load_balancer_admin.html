@@ -100,6 +100,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <option value="percentage">Prozentual</option>
     <option value="priority">Priorität</option>
   </select>
+  <div id="prioInputWrap" style="display:none;align-items:center;gap:6px">
+    <label style="font-size:12px;color:var(--muted)">Priorisierter Eingang:</label>
+    <select id="priorityInput" onchange="setPriorityInput(this.value)"></select>
+  </div>
   <div class="sep"></div>
   <button onclick="loadState()">⟳</button>
   <button class="danger" style="font-size:11px;background:transparent;color:var(--red);border-color:var(--red)" onclick="resetStats()">Stats zurücksetzen</button>
@@ -213,6 +217,7 @@ function renderAll(skipDetail){
   if(!S.state) return;
   const st = S.state;
   $('routingMode').value = st.routing_mode;
+  renderPriorityInputControl(st);
   canvasEl.querySelectorAll('.node').forEach(n=>n.remove());
 
   // ── Client Token nodes (left) ──
@@ -596,6 +601,30 @@ async function loadState(auto){
 async function setRoutingMode(mode){
   try{
     await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({routing_mode:mode})});
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+function renderPriorityInputControl(st){
+  const wrap = $('prioInputWrap');
+  const sel = $('priorityInput');
+  if(!wrap || !sel) return;
+  if(!st || st.routing_mode!=='priority'){
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'flex';
+  const tokens = st.client_tokens || [];
+  let html = '<option value="0">(kein priorisierter Eingang)</option>';
+  html += tokens.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  sel.innerHTML = html;
+  sel.value = String(st.priority_input_token_id || 0);
+}
+
+async function setPriorityInput(tokenIdRaw){
+  const tokenId = parseInt(tokenIdRaw, 10) || 0;
+  try{
+    await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({priority_input_token_id:tokenId})});
     await loadState();
   }catch(err){ alert(err.message) }
 }

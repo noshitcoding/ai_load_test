@@ -632,6 +632,7 @@ class EndpointPatch(BaseModel):
 
 class RoutingPatch(BaseModel):
     routing_mode: Optional[str] = None
+    priority_input_token_id: Optional[int] = Field(default=None, ge=0)
 
 
 class ClientTokenCreate(BaseModel):
@@ -708,7 +709,9 @@ class LoadBalancerEngine:
     # ── endpoint selection ────────────────────────────────────────────────
 
     async def acquire(
-        self, preferred_endpoint_id: Optional[int] = None
+        self,
+        preferred_endpoint_id: Optional[int] = None,
+        prefer_non_primary: bool = False,
     ) -> dict[str, Any]:
         now = time.time()
         healthy = await asyncio.to_thread(
@@ -746,7 +749,9 @@ class LoadBalancerEngine:
                     )
                 raise HTTPException(503, "mapped endpoint not connected")
         elif self.routing_mode == "priority":
-            chosen = await self._pick_priority(healthy)
+            chosen = await self._pick_priority(
+                healthy, prefer_non_primary=prefer_non_primary
+            )
         else:
             chosen = await self._pick_percentage(healthy)
 
@@ -788,11 +793,15 @@ class LoadBalancerEngine:
         return best
 
     async def _pick_priority(
-        self, eps: list[dict[str, Any]]
+        self,
+        eps: list[dict[str, Any]],
+        prefer_non_primary: bool = False,
     ) -> dict[str, Any]:
         ordered = sorted(
             eps, key=lambda e: int(e.get("priority_order", 10))
         )
+        if prefer_non_primary and len(ordered) > 1:
+            ordered = ordered[1:] + ordered[:1]
         async with self._lock:
             for e in ordered:
                 mc = int(e.get("max_concurrent", 0))
@@ -964,6 +973,16 @@ def create_app(
     app.state.store = store
     app.state.engine = engine
 
+    def get_priority_input_token_id() -> Optional[int]:
+        raw = store.get_setting("priority_input_token_id")
+        if not raw:
+            return None
+        try:
+            val = int(raw)
+        except Exception:
+            return None
+        return val if val > 0 else None
+
     # ── auth dependencies ─────────────────────────────────────────────────
 
     def require_admin(
@@ -1056,6 +1075,16 @@ def create_app(
         if client_tok and client_tok.get("preferred_endpoint_id") is not None:
             mapped_eid = int(client_tok["preferred_endpoint_id"])
 
+        priority_input_token_id = None
+        if engine.routing_mode == "priority":
+            priority_input_token_id = get_priority_input_token_id()
+        prefer_non_primary = (
+            mapped_eid is None
+            and engine.routing_mode == "priority"
+            and priority_input_token_id is not None
+            and (client_tid is None or int(client_tid) != priority_input_token_id)
+        )
+
         raw = await request.body()
         try:
             body = json.loads(raw) if raw else {}
@@ -1118,7 +1147,9 @@ def create_app(
                 media_type=c_media,
             )
 
-        ep = await engine.acquire(mapped_eid)
+        ep = await engine.acquire(
+            mapped_eid, prefer_non_primary=prefer_non_primary
+        )
         eid = int(ep["id"])
         ep_name = str(ep["name"])
 
@@ -1321,6 +1352,7 @@ def create_app(
                     1 for e in eps if e.get("connected")
                 ),
                 "routing_mode": engine.routing_mode,
+                "priority_input_token_id": get_priority_input_token_id(),
                 **st,
             }
         )
@@ -1388,6 +1420,7 @@ def create_app(
         return JSONResponse(
             {
                 "routing_mode": engine.routing_mode,
+                "priority_input_token_id": get_priority_input_token_id(),
                 "endpoints": safe,
                 "incoming_pos": {"x": ix, "y": iy},
                 "stats": st,
@@ -1450,7 +1483,29 @@ def create_app(
             await asyncio.to_thread(
                 store.set_setting, "routing_mode", payload.routing_mode
             )
-        return JSONResponse({"routing_mode": engine.routing_mode})
+        if payload.priority_input_token_id is not None:
+            if payload.priority_input_token_id <= 0:
+                await asyncio.to_thread(
+                    store.set_setting, "priority_input_token_id", ""
+                )
+            else:
+                tokens = await asyncio.to_thread(store.list_client_tokens)
+                if not any(
+                    int(t["id"]) == payload.priority_input_token_id
+                    for t in tokens
+                ):
+                    raise HTTPException(404, "priority input token not found")
+                await asyncio.to_thread(
+                    store.set_setting,
+                    "priority_input_token_id",
+                    str(payload.priority_input_token_id),
+                )
+        return JSONResponse(
+            {
+                "routing_mode": engine.routing_mode,
+                "priority_input_token_id": get_priority_input_token_id(),
+            }
+        )
 
     @app.post(
         "/admin/api/reset-stats",
