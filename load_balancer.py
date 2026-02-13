@@ -220,6 +220,8 @@ class SQLiteStore:
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
                     name       TEXT    NOT NULL,
                     token      TEXT    NOT NULL UNIQUE,
+                    preferred_endpoint_id INTEGER,
+                    request_priority INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT    NOT NULL
                 );
 
@@ -235,6 +237,8 @@ class SQLiteStore:
                 "total_requests INTEGER NOT NULL DEFAULT 0",
                 "prompt_tokens_total INTEGER NOT NULL DEFAULT 0",
                 "completion_tokens_total INTEGER NOT NULL DEFAULT 0",
+                "preferred_endpoint_id INTEGER",
+                "request_priority INTEGER NOT NULL DEFAULT 0",
             ]:
                 try:
                     self._conn.execute(
@@ -451,15 +455,26 @@ class SQLiteStore:
     # ── client tokens CRUD ────────────────────────────────────────────────
 
     def create_client_token(
-        self, name: str, token: Optional[str] = None
+        self,
+        name: str,
+        token: Optional[str] = None,
+        preferred_endpoint_id: Optional[int] = None,
+        request_priority: int = 0,
     ) -> dict[str, Any]:
         tok = (token or "").strip() or ("ct-" + secrets.token_urlsafe(32))
         now = now_iso()
         with self._lock:
             cur = self._conn.execute(
-                "INSERT INTO client_tokens(name, token, created_at) "
-                "VALUES(?,?,?)",
-                (name, tok, now),
+                "INSERT INTO client_tokens("
+                "name, token, preferred_endpoint_id, request_priority, created_at"
+                ") VALUES(?,?,?,?,?)",
+                (
+                    name,
+                    tok,
+                    preferred_endpoint_id,
+                    int(request_priority),
+                    now,
+                ),
             )
             self._conn.commit()
             row = self._conn.execute(
@@ -501,7 +516,13 @@ class SQLiteStore:
     def update_client_token(
         self, tid: int, u: dict[str, Any]
     ) -> Optional[dict[str, Any]]:
-        allowed = {"name", "pos_x", "pos_y"}
+        allowed = {
+            "name",
+            "pos_x",
+            "pos_y",
+            "preferred_endpoint_id",
+            "request_priority",
+        }
         parts: list[str] = []
         vals: list[Any] = []
         for k, v in u.items():
@@ -521,6 +542,15 @@ class SQLiteStore:
                 "SELECT * FROM client_tokens WHERE id=?", (tid,)
             ).fetchone()
         return dict(r) if r else None
+
+    def clear_client_token_endpoint_mapping(self, eid: int) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE client_tokens SET preferred_endpoint_id=NULL "
+                "WHERE preferred_endpoint_id=?",
+                (eid,),
+            )
+            self._conn.commit()
 
     def record_client_token_usage(
         self, tid: int, prompt_tokens: int, completion_tokens: int
@@ -588,12 +618,16 @@ class ClientTokenCreate(BaseModel):
     token: Optional[str] = Field(default=None, max_length=500)
     pos_x: float = Field(default=80)
     pos_y: float = Field(default=100)
+    preferred_endpoint_id: Optional[int] = Field(default=None, ge=1)
+    request_priority: int = Field(default=0, ge=0, le=1000)
 
 
 class ClientTokenPatch(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     pos_x: Optional[float] = None
     pos_y: Optional[float] = None
+    preferred_endpoint_id: Optional[int] = Field(default=None, ge=1)
+    request_priority: Optional[int] = Field(default=None, ge=0, le=1000)
 
 
 # ── Routing Engine ────────────────────────────────────────────────────────────
@@ -650,7 +684,9 @@ class LoadBalancerEngine:
 
     # ── endpoint selection ────────────────────────────────────────────────
 
-    async def acquire(self) -> dict[str, Any]:
+    async def acquire(
+        self, preferred_endpoint_id: Optional[int] = None
+    ) -> dict[str, Any]:
         now = time.time()
         healthy = await asyncio.to_thread(
             self.store.list_connected_healthy, now
@@ -665,7 +701,28 @@ class LoadBalancerEngine:
                 503, "all connected endpoints in cooldown"
             )
 
-        if self.routing_mode == "priority":
+        if preferred_endpoint_id is not None:
+            chosen = next(
+                (
+                    e
+                    for e in healthy
+                    if int(e["id"]) == int(preferred_endpoint_id)
+                ),
+                None,
+            )
+            if not chosen:
+                connected = await asyncio.to_thread(
+                    self.store.list_connected_enabled
+                )
+                if any(
+                    int(e["id"]) == int(preferred_endpoint_id)
+                    for e in connected
+                ):
+                    raise HTTPException(
+                        503, "mapped endpoint currently in cooldown"
+                    )
+                raise HTTPException(503, "mapped endpoint not connected")
+        elif self.routing_mode == "priority":
             chosen = await self._pick_priority(healthy)
         else:
             chosen = await self._pick_percentage(healthy)
@@ -857,6 +914,7 @@ def create_app(
         authorization: Optional[str] = Header(None),
     ) -> None:
         request.state.client_token_id = None
+        request.state.client_token = None
         # If no env tokens AND no DB tokens → open access
         has_env = bool(cfg.client_tokens)
         has_db = bool(store.list_client_tokens())
@@ -870,6 +928,7 @@ def create_app(
         rec = store.find_client_token_by_value(tok)
         if rec:
             request.state.client_token_id = rec["id"]
+            request.state.client_token = rec
             return
         raise HTTPException(401, "client token invalid")
 
@@ -920,7 +979,13 @@ def create_app(
         client_tid: Optional[int] = getattr(
             request.state, "client_token_id", None
         )
-        ep = await engine.acquire()
+        client_tok: Optional[dict[str, Any]] = getattr(
+            request.state, "client_token", None
+        )
+        mapped_eid: Optional[int] = None
+        if client_tok and client_tok.get("preferred_endpoint_id") is not None:
+            mapped_eid = int(client_tok["preferred_endpoint_id"])
+        ep = await engine.acquire(mapped_eid)
         eid = int(ep["id"])
         ep_name = str(ep["name"])
 
@@ -930,6 +995,14 @@ def create_app(
         except json.JSONDecodeError:
             await engine.release(eid)
             raise HTTPException(400, "invalid JSON body")
+
+        if (
+            client_tok
+            and client_tok.get("request_priority") is not None
+            and body.get("priority") is None
+        ):
+            body["priority"] = int(client_tok["request_priority"])
+            raw = json.dumps(body).encode("utf-8")
 
         stream = bool(body.get("stream", False))
         headers = build_upstream_headers(request, ep)
@@ -1048,7 +1121,20 @@ def create_app(
     # ── proxy: models ─────────────────────────────────────────────────
 
     async def proxy_models(request: Request) -> JSONResponse:
+        client_tok: Optional[dict[str, Any]] = getattr(
+            request.state, "client_token", None
+        )
+        mapped_eid: Optional[int] = None
+        if client_tok and client_tok.get("preferred_endpoint_id") is not None:
+            mapped_eid = int(client_tok["preferred_endpoint_id"])
+
         endpoints = await asyncio.to_thread(store.list_connected_enabled)
+        if mapped_eid is not None:
+            endpoints = [
+                e for e in endpoints if int(e["id"]) == int(mapped_eid)
+            ]
+            if not endpoints:
+                raise HTTPException(503, "mapped endpoint not connected")
         if not endpoints:
             raise HTTPException(503, "no connected endpoints")
         combined: dict[str, dict[str, Any]] = {}
@@ -1138,9 +1224,13 @@ def create_app(
         tokens_raw = await asyncio.to_thread(store.list_client_tokens)
         cstats = engine.client_stats()
         tokens_safe = []
+        endpoint_name_by_id = {
+            int(e["id"]): str(e["name"]) for e in eps
+        }
         for t in tokens_raw:
             tid = t["id"]
             cs = cstats.get(tid, {})
+            preferred_eid = t.get("preferred_endpoint_id")
             tokens_safe.append({
                 "id": tid,
                 "name": t["name"],
@@ -1152,6 +1242,13 @@ def create_app(
                 "prompt_tokens_total": t.get("prompt_tokens_total", 0),
                 "completion_tokens_total": t.get("completion_tokens_total", 0),
                 "requests_per_second": cs.get("requests_per_second", 0),
+                "preferred_endpoint_id": preferred_eid,
+                "preferred_endpoint_name": endpoint_name_by_id.get(
+                    int(preferred_eid)
+                )
+                if preferred_eid is not None
+                else None,
+                "request_priority": t.get("request_priority", 0),
             })
         return JSONResponse(
             {
@@ -1199,6 +1296,9 @@ def create_app(
         dependencies=[Depends(require_admin)],
     )
     async def delete_ep(eid: int):
+        await asyncio.to_thread(
+            store.clear_client_token_endpoint_mapping, eid
+        )
         if not await asyncio.to_thread(store.delete_endpoint, eid):
             raise HTTPException(404, "endpoint not found")
         return JSONResponse({"ok": True})
@@ -1239,6 +1339,7 @@ def create_app(
         tokens = await asyncio.to_thread(store.list_client_tokens)
         safe = []
         for t in tokens:
+            preferred_eid = t.get("preferred_endpoint_id")
             safe.append({
                 "id": t["id"],
                 "name": t["name"],
@@ -1250,6 +1351,8 @@ def create_app(
                 "total_requests": t.get("total_requests", 0),
                 "prompt_tokens_total": t.get("prompt_tokens_total", 0),
                 "completion_tokens_total": t.get("completion_tokens_total", 0),
+                "preferred_endpoint_id": preferred_eid,
+                "request_priority": t.get("request_priority", 0),
             })
         return JSONResponse(safe)
 
@@ -1258,11 +1361,19 @@ def create_app(
         dependencies=[Depends(require_admin)],
     )
     async def create_token(payload: ClientTokenCreate):
+        if payload.preferred_endpoint_id is not None:
+            ep = await asyncio.to_thread(
+                store.get_endpoint, payload.preferred_endpoint_id
+            )
+            if not ep:
+                raise HTTPException(404, "preferred endpoint not found")
         try:
             tok = await asyncio.to_thread(
                 store.create_client_token,
                 payload.name,
                 payload.token,
+                payload.preferred_endpoint_id,
+                payload.request_priority,
             )
             # Update position if provided
             if tok and (payload.pos_x != 80 or payload.pos_y != 100):
@@ -1285,6 +1396,12 @@ def create_app(
         u = payload.model_dump(exclude_none=True)
         if not u:
             raise HTTPException(400, "nothing to update")
+        if u.get("preferred_endpoint_id") is not None:
+            ep = await asyncio.to_thread(
+                store.get_endpoint, int(u["preferred_endpoint_id"])
+            )
+            if not ep:
+                raise HTTPException(404, "preferred endpoint not found")
         result = await asyncio.to_thread(
             store.update_client_token, tid, u
         )

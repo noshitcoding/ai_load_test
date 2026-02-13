@@ -583,3 +583,72 @@ def test_auth_via_db_client_token(tmp_path: Path) -> None:
             json=payload,
         )
         assert r.status_code == 200
+
+
+# ── 12. Token-level route + priority ────────────────────────────────────
+
+
+def test_db_token_routes_to_mapped_endpoint_and_sets_priority(
+    tmp_path: Path,
+) -> None:
+    seen_auth: list[str] = []
+    seen_priority: list[int | None] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen_auth.append(req.headers.get("Authorization", ""))
+        body = json.loads(req.content.decode("utf-8"))
+        seen_priority.append(body.get("priority"))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+            },
+            headers={"content-type": "application/json"},
+        )
+
+    app = create_app(
+        settings=make_settings(
+            tmp_path / "lb.db", client_tokens=set()
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with TestClient(app) as c:
+        create_endpoint(c, "target-1", "key-1")
+        ep2 = create_endpoint(c, "target-2", "key-2")
+
+        r = c.post(
+            "/admin/api/tokens",
+            headers=admin_headers(),
+            json={
+                "name": "source-1",
+                "token": "source-1-token",
+                "preferred_endpoint_id": ep2["id"],
+                "request_priority": 200,
+            },
+        )
+        assert r.status_code == 200, r.text
+        tok = r.json()
+        assert tok["preferred_endpoint_id"] == ep2["id"]
+        assert tok["request_priority"] == 200
+
+        payload = {
+            "model": "demo",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": False,
+        }
+        r = c.post(
+            "/v1/chat/completions",
+            headers={"Authorization": "Bearer source-1-token"},
+            json=payload,
+        )
+        assert r.status_code == 200, r.text
+
+    # Must use mapped endpoint key (target-2), not target-1
+    assert seen_auth
+    assert seen_auth[0] == "Bearer key-2"
+    assert all(v == "Bearer key-2" for v in seen_auth)
+    # request_priority from client token is injected if request has none
+    assert seen_priority
+    assert seen_priority[0] == 200
