@@ -213,7 +213,9 @@ function normalizeApiUrl(raw){
   var input=(raw||'').trim();
   var url=input.replace(/\/+$/,'');
   if(!url)return'';
-  else if(!/^https?:\/\//i.test(url))url='http://'+url.replace(/^\/+/, '');
+  if(!/^https?:\/\//i.test(url))url='http://'+url.replace(/^\/+/, '');
+  // Strip trailing /v1 – it's added automatically to every request path
+  url=url.replace(/\/v1$/i,'');
   return url;
 }
 function errMsg(e){
@@ -315,7 +317,7 @@ function apiFetch(cfg,path,opts){
   var target=(cfg.url||'')+path;
   var o=opts?Object.assign({},opts):{};
   // Immer WebSocket nutzen für API-Calls an LiteLLM
-  if(target.indexOf('/chat/completions')!==-1||target.indexOf('/models')!==-1){
+  if(target.indexOf('/v1/chat/completions')!==-1||target.indexOf('/v1/models')!==-1){
     var hdrs=o.headers||{};
     return wsFetch(target,o.method||'GET',hdrs,o.body,false).then(function(msg){
       // Fake-Response-Objekt bauen (kompatibel mit bisherigem Code)
@@ -700,7 +702,7 @@ function getLiveConf(id,base){
 
 function testCard(id){
   var cfg=getConf(id),tit=$$('tit'+id),prev=tit.textContent;tit.textContent='⏳ Teste…';
-  apiFetch(cfg,'/models',{headers:{'Authorization':'Bearer '+cfg.key}})
+  apiFetch(cfg,'/v1/models',{headers:{'Authorization':'Bearer '+cfg.key}})
     .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);tit.textContent='✓ Verbunden';setTimeout(function(){tit.textContent=cfg.model||prev},2000)})
     .catch(function(e){
       var m=errMsg(e);
@@ -711,7 +713,7 @@ function testCard(id){
 }
 function loadModels(id){
   var cfg=getConf(id),tit=$$('tit'+id);
-  apiFetch(cfg,'/models',{headers:{'Authorization':'Bearer '+cfg.key}})
+  apiFetch(cfg,'/v1/models',{headers:{'Authorization':'Bearer '+cfg.key}})
     .then(function(r){return r.json()}).then(function(d){
       var ms=(d.data||[]).map(function(m){return m.id}).filter(function(x){return x.indexOf('*')===-1});
       $$('mdl'+id).innerHTML=ms.map(function(m){return'<option value="'+esc(m)+'">'}).join('');
@@ -1081,7 +1083,7 @@ function fire(id,cfg){
   if(cfg.sysPrompt)msgs.push({role:'system',content:cfg.sysPrompt});
   msgs.push({role:'user',content:cfg.prompt});
   var body=JSON.stringify({model:cfg.model,messages:msgs,max_tokens:cfg.maxTok,temperature:cfg.temp,stream:cfg.stream,priority:cfg.priority});
-  var endpoint='/chat/completions';
+  var endpoint='/v1/chat/completions';
   var target=(cfg.url||'')+endpoint;
   var hdrs={'Content-Type':'application/json','Authorization':'Bearer '+cfg.key};
 
