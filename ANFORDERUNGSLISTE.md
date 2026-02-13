@@ -22,7 +22,7 @@ Stand: 13.02.2026
   - Dashboard mit tok/s und req/s Metriken.
   - Persistenz der Konfiguration und Laufzeitstatistiken in SQLite.
   - Containerisiertes Deployment mit separatem Port.
-  - Automatisierte Testabdeckung (9 Tests) inkl. Routing-, Token-Tracking-, Persistenz- und Streaming-Faellen.
+  - Automatisierte Testabdeckung (35 Tests) inkl. Routing-, Token-Tracking-, Persistenz- und Streaming-Faellen.
 
 - Nicht im Scope:
   - Multi-Region Active/Active zwischen mehreren Balancer-Instanzen.
@@ -110,6 +110,19 @@ Stand: 13.02.2026
 - NFR-015: Model-Liste SOLL aus mehreren verbundenen Endpoints aggregiert werden.
 - NFR-016: Token Throughput Tracking MUSS performant ueber ein Time-Window (Sliding Window) erfolgen.
 
+### 7a. Enterprise-Anforderungen (v3)
+
+- NFR-020: Der Balancer MUSS Prometheus-kompatible Metriken unter `/metrics` bereitstellen.
+- NFR-021: Der Balancer MUSS einen TTL-Response-Cache mit konfigurierbarer Groesse und Lebensdauer anbieten.
+- NFR-022: Die Admin-API MUSS per Rate-Limiter (konfigurierbar, RPM) geschuetzt werden.
+- NFR-023: Der Balancer MUSS bei SIGTERM/SIGINT ein Graceful Shutdown mit Connection Draining durchfuehren.
+- NFR-024: Alle Admin-Mutationen MUESSEN in einem Audit-Log erfasst werden.
+- NFR-025: Alle Antworten MUESSEN Security-Header enthalten (`X-Content-Type-Options`, `X-Frame-Options`).
+- NFR-026: Request-Body-Groesse MUSS serverseitig begrenzt werden (Default: 10 MB).
+- NFR-027: CORS-Origins MUESSEN konfigurierbar sein (`LB_CORS_ORIGINS`).
+- NFR-028: Docker-Images MUESSEN Multi-Stage-Builds verwenden und als Non-Root-User laufen.
+- NFR-029: Alle Eingaben MUESSEN via Pydantic v2 validiert werden (URL-Format, Wertebereich, Pflichtfelder).
+
 ## 8. Testanforderungen
 
 - TST-001: Admin-Auth (Token-Pruefung) muss automatisch getestet sein.
@@ -131,7 +144,7 @@ Stand: 13.02.2026
 - AK-004: Ein angelegter Endpoint wird nach Balancer-Neustart weiter angezeigt (Persistenz).
 - AK-005: Load-Tester Requests ueber `http://<host>:8090/v1` funktionieren fuer stream/non-stream.
 - AK-006: Bei Upstream-Fehlern wird ein Endpoint in Cooldown gesetzt und ein alternatives Endpoint verwendet.
-- AK-007: Automatisierte Tests (9 Tests) laufen erfolgreich durch.
+- AK-007: Automatisierte Tests (35 Tests) laufen erfolgreich durch.
 - AK-008: Admin-State liefert nur `api_key_preview` statt Klartext-Key.
 - AK-009: Visual Flow Editor zeigt Endpoints als Nodes mit SVG-Bezier-Wires zum Incoming-Node.
 - AK-010: Routing-Modus ist zwischen Percentage und Priority umschaltbar.
@@ -148,6 +161,14 @@ Stand: 13.02.2026
 | ENV-005 | `LB_FAIL_THRESHOLD` | Fehlversuche bis Cooldown | `3` |
 | ENV-006 | `LB_COOLDOWN_SECONDS` | Cooldown-Dauer in Sekunden | `20` |
 | ENV-007 | `LB_DEFAULT_TIMEOUT_SECONDS` | Globaler Timeout-Fallback | `120` |
+| ENV-008 | `LB_CORS_ORIGINS` | Comma-separated CORS-Origins | `*` |
+| ENV-009 | `LB_CACHE_MAX_ENTRIES` | Max. gecachte Responses | `5000` |
+| ENV-010 | `LB_CACHE_TTL_SECONDS` | Cache-TTL in Sekunden | `300` |
+| ENV-011 | `LB_ADMIN_RATE_LIMIT_RPM` | Admin-API Rate-Limit (Req/Min) | `300` |
+| ENV-012 | `LB_MAX_REQUEST_BODY_BYTES` | Max. Request-Body-Groesse (Bytes) | `10485760` |
+| ENV-013 | `LB_DRAIN_TIMEOUT_SECONDS` | Graceful-Shutdown Drain-Timeout | `30` |
+| ENV-014 | `LB_MAX_CONNECTIONS` | Max Connections im httpx-Pool | `500` |
+| ENV-015 | `LB_MAX_KEEPALIVE` | Max Keepalive-Connections | `200` |
 | ENV-008 | `LB_MAX_CONNECTIONS` | Max Connections im httpx-Pool | `500` |
 | ENV-009 | `LB_MAX_KEEPALIVE` | Max Keepalive-Connections | `200` |
 | ENV-010 | `LB_LOG_LEVEL` | Log-Level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
