@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LLM Load Balancer – Flow Editor</title>
+<style>
+:root{
+  --bg:#0d1117; --surface:#161b22; --card:#21262d; --border:#30363d;
+  --text:#c9d1d9; --muted:#8b949e; --accent:#58a6ff; --green:#3fb950;
+  --yellow:#d29922; --red:#f85149; --wire:#58a6ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Header ─────────────────────────────────────────── */
+.hdr{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:20}
+.hdr h1{font-size:15px;white-space:nowrap}
+.hdr .sep{width:1px;height:22px;background:var(--border)}
+.hdr input,.hdr select,.hdr button{font:13px/1.4 inherit;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text)}
+.hdr button{cursor:pointer}.hdr button:hover{border-color:var(--accent)}
+.hdr button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.hdr .status{font-size:12px;color:var(--muted)}
+.hdr input[type=password]{width:180px}
+
+/* ── Main split ─────────────────────────────────────── */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* ── Canvas ─────────────────────────────────────────── */
+.canvas{flex:1;position:relative;overflow:hidden;background:var(--bg);
+  background-image:radial-gradient(circle,#21262d 1px,transparent 1px);
+  background-size:24px 24px}
+.canvas svg.wires{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}
+.canvas svg .wire{stroke:var(--wire);stroke-width:2.5;fill:none;opacity:.55;transition:opacity .3s}
+.canvas svg .wire.active{opacity:1;filter:drop-shadow(0 0 6px rgba(88,166,255,.4))}
+.canvas svg .wire.temp{stroke:var(--accent);stroke-dasharray:8 4;opacity:.7}
+.canvas svg .wire-label{fill:var(--muted);font-size:11px;font-family:inherit}
+
+/* ── Nodes ──────────────────────────────────────────── */
+.node{position:absolute;width:220px;border-radius:12px;border:1px solid var(--border);background:var(--card);box-shadow:0 4px 16px rgba(0,0,0,.35);z-index:5;cursor:grab;user-select:none;transition:box-shadow .2s}
+.node:hover{box-shadow:0 4px 24px rgba(88,166,255,.15)}
+.node.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.node .head{padding:10px 14px 6px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;border-bottom:1px solid var(--border)}
+.node .head .icon{font-size:16px}
+.node .body{padding:8px 14px 10px;font-size:12px;color:var(--muted);display:grid;gap:3px}
+.node .body .row{display:flex;justify-content:space-between}
+.node .body .val{color:var(--text);font-variant-numeric:tabular-nums}
+.node .body .bar{height:4px;border-radius:2px;background:var(--border);margin-top:2px}
+.node .body .bar .fill{height:100%;border-radius:2px;transition:width .5s}
+
+/* ── Ports ──────────────────────────────────────────── */
+.port{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--border);border:2px solid var(--card);z-index:6;cursor:crosshair;transition:background .15s,transform .15s}
+.port:hover{background:var(--accent);transform:scale(1.3)}
+.port.output{right:-7px;top:50%;margin-top:-7px}
+.port.input{left:-7px;top:50%;margin-top:-7px}
+.port.connected{background:var(--green)}
+
+/* ── Client Token Nodes ─────────────────────────────── */
+.node.client-token{width:180px;border-color:#8b5cf6}
+.node.client-token .head{border-bottom-color:#8b5cf6}
+
+/* ── Sidebar ────────────────────────────────────────── */
+.sidebar{width:340px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:10}
+.sb-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.sb-section h3{font-size:13px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.sb-row{display:flex;gap:8px;margin-bottom:8px;align-items:end}
+.sb-field{display:flex;flex-direction:column;gap:3px;flex:1}
+.sb-field label{font-size:11px;color:var(--muted)}
+.sb-field input,.sb-field select{font:12px/1.4 inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);width:100%}
+.sb-field input:focus,.sb-field select:focus{border-color:var(--accent);outline:none}
+.sb-btn{font:12px/1.4 inherit;padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap}
+.sb-btn:hover{border-color:var(--accent)}
+.sb-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sb-btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
+.sb-btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+.pill{padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;display:inline-block}
+.pill.ok{background:rgba(63,185,80,.15);color:var(--green)}
+.pill.off{background:rgba(248,81,73,.15);color:var(--red)}
+.pill.warn{background:rgba(210,153,34,.15);color:var(--yellow)}
+
+/* ── Footer stats ───────────────────────────────────── */
+.footer{display:flex;align-items:center;gap:20px;padding:6px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:12px;color:var(--muted);flex-shrink:0;z-index:20}
+.footer .metric{display:flex;align-items:center;gap:4px}
+.footer .metric .num{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+
+@media(max-width:900px){.sidebar{width:280px}}
+</style>
+</head>
+<body>
+
+<!-- ═══ Header ═══ -->
+<div class="hdr">
+  <h1>⚡ LLM Load Balancer</h1>
+  <div class="sep"></div>
+  <input id="adminToken" type="password" placeholder="Admin Token"/>
+  <button onclick="saveToken()">Speichern</button>
+  <div class="sep"></div>
+  <label style="font-size:12px;color:var(--muted)">Routing:</label>
+  <select id="routingMode" onchange="setRoutingMode(this.value)">
+    <option value="percentage">Prozentual</option>
+    <option value="priority">Priorität</option>
+  </select>
+  <div class="sep"></div>
+  <button onclick="loadState()">⟳</button>
+  <button class="danger" style="font-size:11px;background:transparent;color:var(--red);border-color:var(--red)" onclick="resetStats()">Stats zurücksetzen</button>
+  <span class="status" id="status">—</span>
+</div>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+
+  <!-- Canvas -->
+  <div class="canvas" id="canvas">
+    <svg class="wires" id="wireSvg"></svg>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sb-section" id="sbInfo">
+      <h3>Info</h3>
+      <p style="font-size:12px;color:var(--muted)">Klicke auf einen Endpoint-Knoten, um dessen Details zu sehen. Ziehe vom <b>Ausgang</b> des Incoming-Knotens zu einem <b>Eingang</b> eines Endpoints, um eine Verbindung herzustellen.</p>
+    </div>
+
+    <div class="sb-section" id="sbDetail" style="display:none">
+      <h3>Endpoint Details</h3>
+      <div id="detailContent"></div>
+    </div>
+
+    <div class="sb-section">
+      <h3>+ Endpoint hinzufügen</h3>
+      <div class="sb-row"><div class="sb-field"><label>Name</label><input id="newName" placeholder="vllm-eu-1"/></div></div>
+      <div class="sb-row"><div class="sb-field"><label>Base URL</label><input id="newUrl" placeholder="https://host:8000/v1"/></div></div>
+      <div class="sb-row"><div class="sb-field"><label>API Key</label><input id="newKey" type="password" placeholder="sk-..."/></div></div>
+      <div class="sb-row">
+        <div class="sb-field"><label>Quota %</label><input id="newQuota" type="number" min="0" max="100" value="0"/></div>
+        <div class="sb-field"><label>Priorität</label><input id="newPriority" type="number" min="1" max="100" value="10"/></div>
+      </div>
+      <div class="sb-row">
+        <div class="sb-field"><label>Max Parallel</label><input id="newMaxC" type="number" min="0" value="0"/></div>
+        <div class="sb-field"><label>Timeout (s)</label><input id="newTimeout" type="number" min="5" value="120"/></div>
+      </div>
+      <div class="sb-row">
+        <div class="sb-field"><label>TLS prüfen</label><select id="newTls"><option value="1">Ja</option><option value="0">Nein</option></select></div>
+        <div class="sb-field"><label>Sofort verbinden</label><select id="newConn"><option value="1">Ja</option><option value="0">Nein</option></select></div>
+      </div>
+      <div class="sb-row" style="margin-top:6px"><button class="sb-btn primary" onclick="createEndpoint()">Endpoint anlegen</button></div>
+    </div>
+
+    <div class="sb-section">
+      <h3>Client-Zugang</h3>
+      <p style="font-size:11px;color:var(--muted);word-break:break-all">
+        Base-URL: <span style="color:var(--text)" id="clientUrl">—</span>
+      </p>
+      <div id="tokenList" style="margin-top:8px"></div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+        <div class="sb-row"><div class="sb-field"><label>Token-Name</label><input id="newTokenName" placeholder="z.B. load-tester-1"/></div></div>
+        <div class="sb-row"><div class="sb-field"><label>Token (leer=auto)</label><input id="newTokenValue" placeholder="auto-generiert"/></div></div>
+        <div class="sb-row" style="margin-top:4px"><button class="sb-btn primary" onclick="createClientToken()">Token erstellen</button></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ Footer ═══ -->
+<div class="footer">
+  <div class="metric">Token/s: <span class="num" id="fTps">0</span></div>
+  <div class="metric">Req/s: <span class="num" id="fRps">0</span></div>
+  <div class="metric">In-Flight: <span class="num" id="fInf">0</span></div>
+  <div class="metric">Endpoints: <span class="num" id="fEps">0</span></div>
+  <div class="metric">Verbunden: <span class="num" id="fConn">0</span></div>
+  <div class="metric">Modus: <span class="num" id="fMode">—</span></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  State                                                                      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const S = {state: null, selected: null, fullTokens: []};
+let isDragging = false;
+let wireDrawing = null;
+
+/* ─── helpers ────── */
+const $ = id => document.getElementById(id);
+const esc = v => String(v||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]||c);
+function getToken(){ return localStorage.getItem('lb_admin_token')||'' }
+function saveToken(){ localStorage.setItem('lb_admin_token', $('adminToken').value.trim()); loadState() }
+function setStatus(t, ok){ const el=$('status'); el.textContent=t; el.style.color=ok?'var(--green)':'var(--red)' }
+
+function adminHeaders(extra){
+  const h = Object.assign({'Content-Type':'application/json'}, extra||{});
+  h['X-Admin-Token'] = getToken();
+  return h;
+}
+
+async function api(path, opts){
+  const o = Object.assign({method:'GET'}, opts||{});
+  o.headers = adminHeaders(o.headers);
+  const r = await fetch(path, o);
+  const txt = await r.text();
+  let d; try{ d=txt?JSON.parse(txt):null }catch(e){ d={raw:txt} }
+  if(!r.ok) throw new Error((d&&(d.detail||d.error))||r.status+' '+r.statusText);
+  return d;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Rendering                                                                  */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const canvasEl = $('canvas');
+const wireSvg  = $('wireSvg');
+
+function renderAll(skipDetail){
+  if(!S.state) return;
+  const st = S.state;
+  $('routingMode').value = st.routing_mode;
+  canvasEl.querySelectorAll('.node').forEach(n=>n.remove());
+
+  // ── Client Token nodes (left) ──
+  let nextTokenY = 80;
+  (st.client_tokens||[]).forEach((ct,i) => {
+    const x = ct.pos_x || 80;
+    const y = ct.pos_y || nextTokenY;
+    nextTokenY = y + 130;
+    const n = mkClientTokenNode(ct);
+    n.style.left = x + 'px';
+    n.style.top = y + 'px';
+    canvasEl.appendChild(n);
+  });
+
+  // ── Incoming node (center) ──
+  const inc = mkNode('incoming', {
+    x: st.incoming_pos.x, y: st.incoming_pos.y,
+    title: '⚡ Incoming',
+    stats: st.stats
+  });
+  canvasEl.appendChild(inc);
+
+  // ── Endpoint nodes (right) ──
+  const totalTok = st.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
+  let nextY = 80;
+  st.endpoints.forEach((ep,i) => {
+    if(ep.pos_y < 10 && ep.pos_x < 10){ ep.pos_x = 420; ep.pos_y = nextY; nextY += 160; }
+    const n = mkNode('endpoint', {x:ep.pos_x, y:ep.pos_y, ep, totalTok});
+    canvasEl.appendChild(n);
+  });
+
+  renderWires();
+  renderFooter();
+  if(!skipDetail) renderDetail();
+}
+
+function mkClientTokenNode(ct){
+  const el = document.createElement('div');
+  el.className = 'node client-token';
+  el.dataset.type = 'client-token';
+  el.dataset.id = ct.id;
+  el.innerHTML = `
+    <div class="head"><span class="icon">🔑</span> ${esc(ct.name)}</div>
+    <div class="body">
+      <div class="row"><span>Requests</span><span class="val">${ct.total_requests}</span></div>
+      <div class="row"><span>Req/s</span><span class="val">${ct.requests_per_second||0}</span></div>
+      <div class="row"><span>Prompt Tok</span><span class="val">${(ct.prompt_tokens_total||0).toLocaleString()}</span></div>
+      <div class="row"><span>Compl Tok</span><span class="val">${(ct.completion_tokens_total||0).toLocaleString()}</span></div>
+    </div>`;
+  // output port on right side
+  const port = document.createElement('div');
+  port.className = 'port output connected';
+  port.style.background = '#8b5cf6';
+  port.title = 'Verbindung zum Incoming';
+  el.appendChild(port);
+  el.addEventListener('mousedown', onNodeDown);
+  return el;
+}
+
+function mkNode(type, cfg){
+  const el = document.createElement('div');
+  el.className = 'node' + (type==='incoming'?' incoming':'') + (S.selected && cfg.ep && S.selected==cfg.ep.id?' selected':'');
+  el.style.left = cfg.x + 'px';
+  el.style.top  = cfg.y + 'px';
+
+  if(type==='incoming'){
+    el.dataset.type = 'incoming';
+    el.innerHTML = `
+      <div class="head"><span class="icon">⚡</span> Incoming</div>
+      <div class="body">
+        <div class="row"><span>In-Flight</span><span class="val">${cfg.stats.total_inflight}</span></div>
+        <div class="row"><span>Req/s</span><span class="val">${cfg.stats.requests_per_second}</span></div>
+        <div class="row"><span>Token/s</span><span class="val">${cfg.stats.tokens_per_second}</span></div>
+      </div>`;
+    // input port (left, for wires from client tokens)
+    const inPort = document.createElement('div');
+    inPort.className = 'port input connected';
+    inPort.style.pointerEvents = 'none';
+    el.appendChild(inPort);
+    // output port (right, for wires to endpoints)
+    const port = document.createElement('div');
+    port.className = 'port output';
+    port.title = 'Ziehen zum Verbinden';
+    el.appendChild(port);
+    // drag from output port
+    port.addEventListener('mousedown', onPortDown);
+  } else {
+    const ep = cfg.ep;
+    el.dataset.type = 'endpoint';
+    el.dataset.id = ep.id;
+    const ok = ep.enabled && ep.cooldown_remaining_s<=0;
+    const statusPill = !ep.enabled ? '<span class="pill off">AUS</span>'
+      : ep.cooldown_remaining_s > 0 ? '<span class="pill warn">COOLDOWN</span>'
+      : '<span class="pill ok">OK</span>';
+    const actualPct = cfg.totalTok > 0 ? (ep.completion_tokens_total / cfg.totalTok * 100).toFixed(1) : '0.0';
+    const successRate = ep.total_requests > 0 ? ((ep.total_success/ep.total_requests)*100).toFixed(0)+'%' : '—';
+    const tps = S.state.stats.tokens_per_second > 0 && cfg.totalTok > 0
+      ? (ep.completion_tokens_total / cfg.totalTok * S.state.stats.tokens_per_second).toFixed(1) : '0';
+    el.innerHTML = `
+      <div class="head"><span class="icon">${ep.connected?'🟢':'⚪'}</span> ${esc(ep.name)} ${statusPill}</div>
+      <div class="body">
+        <div class="row"><span>Quota</span><span class="val">${ep.token_quota_percent}%</span></div>
+        <div class="row"><span>Ist</span><span class="val">${actualPct}%</span></div>
+        <div class="bar"><div class="fill" style="width:${Math.min(100,actualPct)}%;background:${ok?'var(--accent)':'var(--red)'}"></div></div>
+        <div class="row"><span>In-Flight</span><span class="val">${ep.inflight}</span></div>
+        <div class="row"><span>Token/s</span><span class="val">${tps}</span></div>
+        <div class="row"><span>Latenz</span><span class="val">${(ep.avg_latency_ms||0).toFixed(0)}ms</span></div>
+        <div class="row"><span>Erfolg</span><span class="val">${successRate}</span></div>
+        <div class="row"><span>Prio</span><span class="val">#${ep.priority_order}</span></div>
+      </div>`;
+    const port = document.createElement('div');
+    port.className = 'port input' + (ep.connected?' connected':'');
+    port.title = ep.connected ? 'Verbunden – Klick zum Trennen' : 'Nicht verbunden';
+    port.addEventListener('mousedown', (e)=>{ e.stopPropagation(); toggleConn(ep.id, !ep.connected) });
+    el.appendChild(port);
+    // Selection is handled in document mouseup (only when not dragged)
+  }
+  // drag handler
+  el.addEventListener('mousedown', onNodeDown);
+  return el;
+}
+
+/* ─── Wires ──── */
+function renderWires(){
+  wireSvg.innerHTML = '';
+  if(!S.state) return;
+  const incEl = canvasEl.querySelector('.node.incoming');
+  if(!incEl) return;
+  const cr = canvasEl.getBoundingClientRect();
+
+  // ── Wires: Client Tokens → Incoming ──
+  const incInputX = incEl.offsetLeft;
+  const incInputY = incEl.offsetTop + incEl.offsetHeight / 2;
+  (S.state.client_tokens||[]).forEach(ct => {
+    const ctEl = canvasEl.querySelector(`.node.client-token[data-id="${ct.id}"]`);
+    if(!ctEl) return;
+    const outPort = ctEl.querySelector('.port.output');
+    if(!outPort) return;
+    const oR = outPort.getBoundingClientRect();
+    const x1 = oR.left - cr.left + oR.width/2;
+    const y1 = oR.top - cr.top + oR.height/2;
+    const x2 = incInputX;
+    const y2 = incInputY;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', bezier(x1,y1,x2,y2));
+    path.setAttribute('class', 'wire active');
+    path.setAttribute('style', 'stroke:#8b5cf6;opacity:.6');
+    wireSvg.appendChild(path);
+  });
+
+  // ── Wires: Incoming → Endpoints ──
+  const outPort = incEl.querySelector('.port.output');
+  if(!outPort) return;
+
+  S.state.endpoints.filter(e=>e.connected).forEach(ep=>{
+    const epEl = canvasEl.querySelector(`.node[data-id="${ep.id}"][data-type="endpoint"]`);
+    if(!epEl) return;
+    const inPort = epEl.querySelector('.port.input');
+    if(!inPort) return;
+    const or2 = outPort.getBoundingClientRect();
+    const ir = inPort.getBoundingClientRect();
+    const x1 = or2.left - cr.left + or2.width/2;
+    const y1 = or2.top  - cr.top  + or2.height/2;
+    const x2 = ir.left - cr.left + ir.width/2;
+    const y2 = ir.top  - cr.top  + ir.height/2;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', bezier(x1,y1,x2,y2));
+    path.setAttribute('class', 'wire'+(ep.inflight>0?' active':''));
+    wireSvg.appendChild(path);
+
+    const mx = (x1+x2)/2, my = (y1+y2)/2 - 8;
+    const totalTok = S.state.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
+    const pct = totalTok > 0 ? (ep.completion_tokens_total/totalTok*100).toFixed(0)+'%' : '—';
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+    lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
+    lbl.setAttribute('class','wire-label');
+    lbl.setAttribute('text-anchor','middle');
+    lbl.textContent = pct;
+    wireSvg.appendChild(lbl);
+  });
+}
+
+function bezier(x1,y1,x2,y2){
+  const cp = Math.min(Math.abs(x2-x1)*0.5, 150);
+  return `M ${x1} ${y1} C ${x1+cp} ${y1}, ${x2-cp} ${y2}, ${x2} ${y2}`;
+}
+
+/* ─── Footer ── */
+function renderFooter(){
+  const st = S.state;
+  $('fTps').textContent  = st.stats.tokens_per_second;
+  $('fRps').textContent  = st.stats.requests_per_second;
+  $('fInf').textContent  = st.stats.total_inflight;
+  $('fEps').textContent  = st.endpoints.length;
+  $('fConn').textContent = st.endpoints.filter(e=>e.connected).length;
+  $('fMode').textContent = st.routing_mode === 'priority' ? 'Priorität' : 'Prozentual';
+  $('clientUrl').textContent = location.origin + '/v1';
+  renderTokenList();
+}
+
+/* ─── Detail panel ── */
+function selectEndpoint(id){
+  S.selected = S.selected===id ? null : id;
+  canvasEl.querySelectorAll('.node').forEach(n=>n.classList.remove('selected'));
+  if(S.selected){
+    const el = canvasEl.querySelector(`.node[data-id="${S.selected}"]`);
+    if(el) el.classList.add('selected');
+  }
+  renderDetail();
+}
+
+function renderDetail(){
+  const sec = $('sbDetail');
+  const info = $('sbInfo');
+  if(!S.selected || !S.state){ sec.style.display='none'; info.style.display=''; return; }
+  const ep = S.state.endpoints.find(e=>e.id===S.selected);
+  if(!ep){ sec.style.display='none'; info.style.display=''; return; }
+  sec.style.display=''; info.style.display='none';
+  const totalTok = S.state.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
+  const actualPct = totalTok>0?(ep.completion_tokens_total/totalTok*100).toFixed(1):'0.0';
+  $('detailContent').innerHTML = `
+    <div class="sb-row"><div class="sb-field"><label>Name</label><input id="dName" value="${esc(ep.name)}"/></div></div>
+    <div class="sb-row"><div class="sb-field"><label>Base URL</label><input id="dUrl" value="${esc(ep.base_url)}"/></div></div>
+    <div class="sb-row"><div class="sb-field"><label>API Key (leer=unverändert)</label><input id="dKey" type="password" placeholder="(unverändert)"/></div></div>
+    <div class="sb-row">
+      <div class="sb-field"><label>Quota %</label><input id="dQuota" type="number" min="0" max="100" value="${ep.token_quota_percent}"/></div>
+      <div class="sb-field"><label>Ist %</label><input value="${actualPct}" disabled style="opacity:.6"/></div>
+    </div>
+    <div class="sb-row">
+      <div class="sb-field"><label>Priorität</label><input id="dPrio" type="number" min="1" max="100" value="${ep.priority_order}"/></div>
+      <div class="sb-field"><label>Max Parallel</label><input id="dMaxC" type="number" min="0" value="${ep.max_concurrent}"/></div>
+    </div>
+    <div class="sb-row">
+      <div class="sb-field"><label>Timeout (s)</label><input id="dTimeout" type="number" min="5" value="${ep.timeout_seconds}"/></div>
+      <div class="sb-field"><label>TLS prüfen</label><select id="dTls"><option value="1"${ep.verify_tls?' selected':''}>Ja</option><option value="0"${!ep.verify_tls?' selected':''}>Nein</option></select></div>
+    </div>
+    <div class="sb-row">
+      <div class="sb-field"><label>Aktiviert</label><select id="dEnabled"><option value="1"${ep.enabled?' selected':''}>Ja</option><option value="0"${!ep.enabled?' selected':''}>Nein</option></select></div>
+      <div class="sb-field"><label>Verbunden</label><select id="dConnected"><option value="1"${ep.connected?' selected':''}>Ja</option><option value="0"${!ep.connected?' selected':''}>Nein</option></select></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin:6px 0">
+      API Key: ${esc(ep.api_key_preview)} | Requests: ${ep.total_requests} | Erfolg: ${ep.total_success} | Prompt-Tok: ${ep.prompt_tokens_total.toLocaleString()} | Compl-Tok: ${ep.completion_tokens_total.toLocaleString()}
+    </div>
+    <div class="sb-row" style="gap:6px">
+      <button class="sb-btn primary" onclick="saveEndpoint(${ep.id})">Speichern</button>
+      <button class="sb-btn ${ep.connected?'danger':'green'}" onclick="toggleConn(${ep.id},${!ep.connected})">${ep.connected?'Trennen':'Verbinden'}</button>
+      <button class="sb-btn danger" onclick="deleteEndpoint(${ep.id})">Löschen</button>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Drag & Wire-Drawing                                                        */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+let dragState = null;
+
+function onNodeDown(e){
+  if(e.target.closest('.port')) return;
+  const node = e.currentTarget;
+  e.preventDefault();
+  isDragging = true;
+  dragState = {
+    el: node,
+    type: node.dataset.type,
+    id: node.dataset.id || null,
+    startX: e.clientX,
+    startY: e.clientY,
+    origLeft: node.offsetLeft,
+    origTop: node.offsetTop,
+    moved: false
+  };
+}
+
+document.addEventListener('mousemove', e=>{
+  // ── node drag ──
+  if(dragState){
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    if(Math.abs(dx)>3||Math.abs(dy)>3) dragState.moved = true;
+    dragState.el.style.left = (dragState.origLeft + dx) + 'px';
+    dragState.el.style.top  = (dragState.origTop  + dy) + 'px';
+    renderWires();
+  }
+  // ── wire drawing ──
+  if(wireDrawing){
+    const cr = canvasEl.getBoundingClientRect();
+    const x2 = e.clientX - cr.left;
+    const y2 = e.clientY - cr.top;
+    const tw = document.getElementById('temp-wire');
+    if(tw) tw.setAttribute('d', bezier(wireDrawing.x1, wireDrawing.y1, x2, y2));
+  }
+});
+
+document.addEventListener('mouseup', e=>{
+  // ── finish node drag ──
+  if(dragState){
+    if(dragState.moved){
+      const x = dragState.el.offsetLeft;
+      const y = dragState.el.offsetTop;
+      if(dragState.type==='incoming'){
+        api('/admin/api/incoming-pos',{method:'PATCH',body:JSON.stringify({x,y})}).catch(()=>{});
+      } else if(dragState.type==='client-token' && dragState.id){
+        api(`/admin/api/tokens/${dragState.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+      } else if(dragState.id){
+        api(`/admin/api/endpoints/${dragState.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+      }
+    } else if(dragState.type==='endpoint' && dragState.id){
+      // Click without drag on endpoint → select it
+      selectEndpoint(parseInt(dragState.id));
+    }
+    dragState = null;
+    setTimeout(()=>{ isDragging=false }, 50);
+  }
+  // ── finish wire drawing ──
+  if(wireDrawing){
+    const tw = document.getElementById('temp-wire');
+    if(tw) tw.remove();
+    // check if dropped on input port
+    const tgt = document.elementFromPoint(e.clientX, e.clientY);
+    const port = tgt?.closest('.port.input');
+    if(port){
+      const node = port.closest('.node');
+      const epId = node?.dataset.id;
+      if(epId) toggleConn(parseInt(epId), true);
+    }
+    wireDrawing = null;
+  }
+});
+
+function onPortDown(e){
+  e.preventDefault();
+  e.stopPropagation();
+  const port = e.currentTarget;
+  const cr = canvasEl.getBoundingClientRect();
+  const pr = port.getBoundingClientRect();
+  wireDrawing = {
+    x1: pr.left - cr.left + pr.width/2,
+    y1: pr.top  - cr.top  + pr.height/2,
+  };
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.id = 'temp-wire';
+  path.setAttribute('class','wire temp');
+  wireSvg.appendChild(path);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  API Actions                                                                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+async function loadState(auto){
+  if(isDragging) return;
+  try{
+    S.state = await api('/admin/api/state');
+    // Load full tokens for display
+    try{ S.fullTokens = await api('/admin/api/tokens'); }catch(e){ S.fullTokens = []; }
+    setStatus('Verbunden', true);
+    // Skip detail panel re-render during auto-refresh to keep user edits
+    renderAll(auto && S.selected);
+  } catch(err){
+    setStatus('Fehler: '+err.message, false);
+  }
+}
+
+async function setRoutingMode(mode){
+  try{
+    await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({routing_mode:mode})});
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+async function resetStats(){
+  if(!confirm('Alle Statistiken zurücksetzen?')) return;
+  try{ await api('/admin/api/reset-stats',{method:'POST'}); await loadState(); }
+  catch(err){ alert(err.message) }
+}
+
+async function createEndpoint(){
+  const p = {
+    name: $('newName').value.trim(),
+    base_url: $('newUrl').value.trim(),
+    api_key: $('newKey').value.trim(),
+    token_quota_percent: parseFloat($('newQuota').value)||0,
+    priority_order: parseInt($('newPriority').value)||10,
+    max_concurrent: parseInt($('newMaxC').value)||0,
+    timeout_seconds: parseFloat($('newTimeout').value)||120,
+    verify_tls: $('newTls').value==='1',
+    connected: $('newConn').value==='1',
+    pos_x: 420,
+    pos_y: 80 + (S.state?S.state.endpoints.length:0) * 160,
+  };
+  if(!p.name||!p.base_url) return alert('Name und Base URL sind Pflicht');
+  try{
+    await api('/admin/api/endpoints',{method:'POST',body:JSON.stringify(p)});
+    $('newName').value=''; $('newUrl').value=''; $('newKey').value='';
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+async function saveEndpoint(id){
+  const p = {
+    name: $('dName').value.trim(),
+    base_url: $('dUrl').value.trim(),
+    token_quota_percent: parseFloat($('dQuota').value)||0,
+    priority_order: parseInt($('dPrio').value)||10,
+    max_concurrent: parseInt($('dMaxC').value)||0,
+    timeout_seconds: parseFloat($('dTimeout').value)||120,
+    verify_tls: $('dTls').value==='1',
+    enabled: $('dEnabled').value==='1',
+    connected: $('dConnected').value==='1',
+  };
+  const k = $('dKey').value.trim();
+  if(k) p.api_key = k;
+  try{
+    await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify(p)});
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+async function toggleConn(id, conn){
+  try{
+    await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify({connected:conn})});
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+async function deleteEndpoint(id){
+  if(!confirm('Endpoint wirklich löschen?')) return;
+  try{
+    await api(`/admin/api/endpoints/${id}`,{method:'DELETE'});
+    if(S.selected===id) S.selected=null;
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+/* ═══ Client Token Management ═══ */
+function renderTokenList(){
+  const el = $('tokenList');
+  if(!el || !S.state) return;
+  const tokens = S.fullTokens || [];
+  if(tokens.length === 0){
+    el.innerHTML = '<p style="font-size:11px;color:var(--muted)">Keine Client-Tokens. API ist offen (sofern LB_CLIENT_TOKENS nicht gesetzt).</p>';
+    return;
+  }
+  el.innerHTML = tokens.map(t => `
+    <div style="margin-bottom:8px;padding:8px;background:var(--card);border-radius:6px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:600;color:var(--text)">${esc(t.name)}</span>
+        <button class="sb-btn danger" style="font-size:10px;padding:2px 6px" onclick="deleteClientToken(${t.id})" title="Löschen">✕</button>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <input readonly value="${esc(t.token)}" style="flex:1;font:11px/1.4 monospace;padding:4px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--accent);cursor:text" onclick="this.select()"/>
+        <button class="sb-btn" style="font-size:10px;padding:3px 8px" onclick="copyTokenDirect('${esc(t.token)}',this)" title="Kopieren">📋</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function copyTokenDirect(token, btn){
+  navigator.clipboard.writeText(token).then(()=>{
+    const orig = btn.textContent; btn.textContent='✅'; setTimeout(()=>btn.textContent=orig, 1500);
+  }).catch(()=>{});
+}
+
+async function createClientToken(){
+  const name = $('newTokenName').value.trim();
+  if(!name) return alert('Token-Name ist Pflicht');
+  const token = $('newTokenValue').value.trim() || null;
+  try{
+    const result = await api('/admin/api/tokens',{method:'POST',body:JSON.stringify({name, token})});
+    $('newTokenName').value = '';
+    $('newTokenValue').value = '';
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+async function deleteClientToken(tid){
+  if(!confirm('Client-Token wirklich löschen?')) return;
+  try{
+    await api(`/admin/api/tokens/${tid}`,{method:'DELETE'});
+    await loadState();
+  }catch(err){ alert(err.message) }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Init                                                                       */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+(function init(){
+  $('adminToken').value = getToken();
+  loadState();
+  setInterval(()=>loadState(true), 3000);
+})();
+</script>
+</body>
+</html>

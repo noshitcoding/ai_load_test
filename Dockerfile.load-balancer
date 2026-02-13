@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements-load-balancer.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY load_balancer.py load_balancer_admin.html ./
+
+EXPOSE 8090
+
+CMD ["python", "-u", "load_balancer.py"]
