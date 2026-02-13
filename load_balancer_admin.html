@@ -422,6 +422,9 @@ function selectEndpoint(id){
     const el = canvasEl.querySelector(`.node[data-id="${S.selected}"]`);
     if(el) el.classList.add('selected');
   }
+  // Blur sidebar input so renderDetail can rebuild the form
+  const ae = document.activeElement;
+  if(ae && ae.closest('#detailContent')) ae.blur();
   renderDetail();
 }
 
@@ -431,6 +434,10 @@ function renderDetail(){
   if(!S.selected || !S.state){ sec.style.display='none'; info.style.display=''; return; }
   const ep = S.state.endpoints.find(e=>e.id===S.selected);
   if(!ep){ sec.style.display='none'; info.style.display=''; return; }
+  // Don't rebuild if user is actively editing inside the detail panel
+  const dc = $('detailContent');
+  const ae = document.activeElement;
+  if(dc && ae && dc.contains(ae) && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA')) return;
   sec.style.display=''; info.style.display='none';
   const totalTok = S.state.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
   const actualPct = totalTok>0?(ep.completion_tokens_total/totalTok*100).toFixed(1):'0.0';
@@ -561,6 +568,12 @@ function onPortDown(e){
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  API Actions                                                                */
 /* ═══════════════════════════════════════════════════════════════════════════ */
+function isEditingForm(){
+  const ae = document.activeElement;
+  if(!ae) return false;
+  return (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
+}
+
 async function loadState(auto){
   if(isDragging) return;
   try{
@@ -568,8 +581,13 @@ async function loadState(auto){
     // Load full tokens for display
     try{ S.fullTokens = await api('/admin/api/tokens'); }catch(e){ S.fullTokens = []; }
     setStatus('Verbunden', true);
-    // Skip detail panel re-render during auto-refresh to keep user edits
-    renderAll(auto && S.selected);
+    if(auto && isEditingForm()){
+      // User is editing a form field – only update footer stats, don't
+      // destroy/recreate canvas nodes or overwrite sidebar inputs
+      renderFooter();
+    } else {
+      renderAll(auto && S.selected);
+    }
   } catch(err){
     setStatus('Fehler: '+err.message, false);
   }
