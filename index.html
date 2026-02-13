@@ -62,10 +62,10 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
 .tok-bars .tb{flex:1;min-width:2px;border-radius:1px 1px 0 0;opacity:.6}
 .tps-bars{display:flex;align-items:flex-end;gap:1px;height:28px;margin-top:6px}
 .tps-bars .tpb{flex:1;min-width:2px;border-radius:1px 1px 0 0;background:var(--cyan);opacity:.6}
-.err-list{max-height:120px;overflow-y:auto;font-size:11px}
-.err-item{padding:4px 0;border-bottom:1px solid rgba(45,55,72,.3);display:flex;gap:8px}
-.err-item .et{color:var(--text2);min-width:60px;flex-shrink:0}.err-item .em{color:var(--error);word-break:break-all}
-.err-item .ec{font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600;flex-shrink:0}
+.err-list{max-height:360px;overflow-y:auto;font-size:12px}
+.err-item{padding:6px 0;border-bottom:1px solid rgba(45,55,72,.3);display:flex;gap:8px;align-items:flex-start}
+.err-item .et{color:var(--text2);min-width:64px;flex-shrink:0}.err-item .em{color:var(--error);white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.35}
+.err-item .ec{font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600;flex-shrink:0;margin-top:1px}
 .err-item .ec.c4{background:rgba(245,158,11,.15);color:var(--warn)}
 .err-item .ec.c5{background:rgba(239,68,68,.15);color:var(--error)}
 .err-item .ec.cN{background:rgba(168,85,247,.15);color:var(--purple)}
@@ -76,8 +76,15 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
 .kpi{background:var(--bg);border-radius:var(--radius);padding:10px;text-align:center}
 .kpi .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
 .kpi .k{font-size:9px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.info-i{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;margin-left:4px;border:1px solid var(--border);border-radius:50%;font-size:9px;color:var(--text2);cursor:help;vertical-align:middle;line-height:1}
 .st{font-size:13px;color:var(--text2);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
 .hist{display:flex;flex-direction:column;gap:3px;margin-bottom:24px}
+.line-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px;margin-bottom:24px}
+.line-svg{width:100%;height:240px;display:block}
+.line-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.line-item{display:flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--border);border-radius:999px;background:var(--card2);font-size:11px;color:var(--text2)}
+.line-dot{width:12px;height:2px;border-radius:2px;display:inline-block}
+.line-empty{font-size:12px;color:var(--text2);padding:8px}
 .hr{display:flex;align-items:center;gap:8px;font-size:12px}
 .hl{width:80px;text-align:right;color:var(--text2);flex-shrink:0;font-variant-numeric:tabular-nums}
 .hbg{flex:1;background:var(--bg);border-radius:3px;height:20px;overflow:hidden}
@@ -115,9 +122,11 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
     <button class="bp" onclick="addCard()">+ Modell hinzufügen</button>
     <select id="presetSelect" style="width:auto;min-width:220px">
       <option value="">Benchmark-Preset wählen…</option>
-      <option value="latency">Latency (stabil, wenig Last)</option>
-      <option value="throughput">Throughput (max Last)</option>
-      <option value="priority">Priority-Nachweis (Key1 vs Key2)</option>
+      <option value="latency">Latenz-Baseline (sequentiell)</option>
+      <option value="throughput">Max Throughput (Dauerfeuer)</option>
+      <option value="parallel_limit">Parallel-Limit finden</option>
+      <option value="rpm_limit">RPM-Limit testen</option>
+      <option value="key_compare">Key-Vergleich (2 Keys)</option>
     </select>
     <button class="bo" onclick="applyPresetFromUI()">⚙️ Preset anwenden</button>
     <div class="sep"></div>
@@ -131,18 +140,25 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
     <button class="bo" onclick="saveBenchmarkProfile()">💾 Profil speichern</button>
     <button class="bo" onclick="loadBenchmarkProfile()">📂 Profil laden</button>
     <button class="bo" onclick="deleteBenchmarkProfile()">🗑 Profil löschen</button>
+    <select id="modelCfgSelect" style="width:auto;min-width:200px">
+      <option value="">Modell-Konfig…</option>
+    </select>
+    <button class="bo" onclick="saveModelConfig()">💾 Modell speichern</button>
+    <button class="bo" onclick="loadModelConfig()">📂 Modell laden</button>
+    <button class="bo" onclick="deleteModelConfig()">🗑 Modell löschen</button>
     <div class="sep"></div>
     <button class="bo" onclick="exportJSON()">📥 Export</button>
     <button class="bo" onclick="importJSON()">📤 Import</button>
     <button class="bo" onclick="copyClipboard()">📋 Clipboard</button>
     <button class="bo" onclick="clearLog()">🗑 Log leeren</button>
+    <button class="bo" onclick="downloadEventLog()" title="Strukturiertes Event-Log als JSON herunterladen">📊 Event-Log</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
   </div>
 
   <div class="cards" id="cardsBox"></div>
 
   <div class="dash">
-    <div class="dash-title">Dashboard<span style="flex:1"></span><span style="font-size:11px;color:var(--text2)" id="dashClock"></span></div>
+    <div class="dash-title">Dashboard<span style="flex:1"></span><span id="wsStatus" style="font-size:11px;cursor:help" title="WebSocket Status">WS: ⏳</span>&nbsp;<span style="font-size:11px;color:var(--text2)" id="dashClock"></span></div>
     <div class="dash-body">
       <div class="kpi-row" id="kpiRow"></div>
       <div class="st">Latenz-Verteilung</div>
@@ -151,6 +167,14 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
       <div class="hist" id="tokHistBox"></div>
       <div class="st">Tok/s pro Request Verteilung</div>
       <div class="hist" id="tpsHistBox"></div>
+      <div class="st">Key-Vergleich: beantwortete Requests über Zeit</div>
+      <div id="keyLineBox"></div>
+      <div class="st">RPS je Key</div>
+      <div id="rpsKeyBox"></div>
+      <div class="st">Sendeintervall je Karte (Delay-Kontrolle)</div>
+      <div id="dispatchLineBox"></div>
+      <div class="st">Priorisierungs-Check</div>
+      <div id="prioCheckBox"></div>
       <div class="st">Modell-Vergleich <span style="font-size:10px;color:var(--text2);font-weight:400">(Klick auf Spalte zum Sortieren)</span></div>
       <div style="overflow-x:auto"><table class="cmp" id="cmpTbl"></table></div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -175,40 +199,309 @@ header h1{font-size:18px;font-weight:600}header h1 span{color:var(--primary)}
 
 <script>
 var NX=0,C={},LOG=[],SORT={col:null,asc:true};
+var ELOG=[]; // structured event log for analysis
+var ELOG_SEQ=0; // monotonic sequence counter
 var PROFILE_KEY='llm_benchmark_profiles_v1';
+var MODEL_CFG_KEY='llm_model_configs_v1';
 var COLORS=['#4f8ff7','#22c55e','#f59e0b','#ef4444','#a855f7','#06b6d4','#ec4899','#84cc16','#fb923c','#14b8a6'];
 function $$(id){return document.getElementById(id)}
 function fms(v){if(v===null||v===undefined||isNaN(v))return'–';return v<1000?Math.round(v)+'ms':(v/1000).toFixed(2)+'s'}
 function fn(v,d){return(v===null||v===undefined||isNaN(v))?'–':(d!==undefined?v.toFixed(d):v)}
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+function normalizeApiUrl(raw){
+  var input=(raw||'').trim();
+  var url=input.replace(/\/+$/,'');
+  if(!url)return'';
+  else if(!/^https?:\/\//i.test(url))url='http://'+url.replace(/^\/+/, '');
+  return url;
+}
+function errMsg(e){
+  if(!e)return'Error';
+  if(typeof e==='string')return e;
+  return e.message||String(e)||'Error';
+}
+function shouldUseInsecureProxy(cfg){
+  return cfg&&cfg.sslVerify===false&&/^https:\/\//i.test(cfg.url||'');
+}
+/* ──────── WebSocket Proxy Transport ──────── */
+var WS={sock:null,cbs:{},seq:0,reconnTimer:null,ready:false,connectPromise:null};
+function wsUpdateStatus(){
+  var el=document.getElementById('wsStatus');
+  if(!el)return;
+  if(WS.ready){el.textContent='WS: \u2705';el.title='WebSocket verbunden'}
+  else{el.textContent='WS: \u274c';el.title='WebSocket getrennt'}
+}
+function wsConnect(){
+  if(WS.sock&&(WS.sock.readyState===0||WS.sock.readyState===1))return WS.connectPromise;
+  var proto=location.protocol==='https:'?'wss:':'ws:';
+  var url=proto+'//'+location.host+'/ws';
+  console.log('[WS] connecting to',url);
+  WS.sock=new WebSocket(url);
+  WS.connectPromise=new Promise(function(resolve){
+    WS.sock.onopen=function(){
+      WS.ready=true;
+      console.log('[WS] connected, readyState='+WS.sock.readyState);
+      wsUpdateStatus();
+      resolve(true);
+    };
+  });
+  WS.sock.onclose=function(ev){
+    WS.ready=false;
+    console.log('[WS] closed code='+ev.code+' reason='+ev.reason);
+    wsUpdateStatus();
+    clearTimeout(WS.reconnTimer);
+    WS.reconnTimer=setTimeout(wsConnect,2000);
+  };
+  WS.sock.onerror=function(ev){
+    WS.ready=false;
+    console.error('[WS] error',ev);
+    wsUpdateStatus();
+  };
+  WS.sock.onmessage=function(ev){
+    try{var msg=JSON.parse(ev.data)}catch(e){console.error('[WS] bad JSON',ev.data);return}
+    var id=msg.id,cb=WS.cbs[id];
+    if(!cb){console.warn('[WS] no callback for id='+id);return}
+    if(msg.type==='response'){
+      delete WS.cbs[id];
+      cb.resolve(msg);
+    }else if(msg.type==='stream_start'){
+      cb.status=msg.status;cb.headers=msg.headers;cb.chunks=[];
+      if(cb.onStart)cb.onStart(msg);
+    }else if(msg.type==='stream_chunk'){
+      if(cb.chunks)cb.chunks.push(msg.data);
+      if(cb.onChunk)cb.onChunk(msg.data);
+    }else if(msg.type==='stream_end'){
+      delete WS.cbs[id];
+      cb.resolve({status:cb.status,headers:cb.headers||{},chunks:cb.chunks||[]});
+    }else if(msg.type==='error'){
+      delete WS.cbs[id];
+      cb.reject(new Error(msg.error));
+    }
+  };
+  return WS.connectPromise;
+}
+wsConnect();
+
+function wsEnsureReady(){
+  if(WS.ready&&WS.sock&&WS.sock.readyState===1)return Promise.resolve();
+  console.log('[WS] not ready, reconnecting...');
+  WS.connectPromise=null;
+  if(WS.sock){try{WS.sock.close()}catch(e){}}
+  WS.sock=null;
+  return wsConnect();
+}
+
+function wsFetch(url,method,headers,body,stream){
+  return wsEnsureReady().then(function(){
+    return new Promise(function(resolve,reject){
+      if(!WS.ready||!WS.sock||WS.sock.readyState!==1){
+        return reject(new Error('WebSocket nicht verbunden (state='+(WS.sock?WS.sock.readyState:'null')+')'));
+      }
+      var id=String(++WS.seq);
+      WS.cbs[id]={resolve:resolve,reject:reject,chunks:[],status:0,headers:{}};
+      var payload=JSON.stringify({id:id,url:url,method:method||'GET',headers:headers||{},body:body||null,stream:!!stream});
+      try{
+        WS.sock.send(payload);
+      }catch(e){
+        delete WS.cbs[id];
+        reject(new Error('WS send failed: '+e.message));
+      }
+    });
+  });
+}
+
+function apiFetch(cfg,path,opts){
+  var target=(cfg.url||'')+path;
+  var o=opts?Object.assign({},opts):{};
+  // Immer WebSocket nutzen für API-Calls an LiteLLM
+  if(target.indexOf('/chat/completions')!==-1||target.indexOf('/models')!==-1){
+    var hdrs=o.headers||{};
+    return wsFetch(target,o.method||'GET',hdrs,o.body,false).then(function(msg){
+      // Fake-Response-Objekt bauen (kompatibel mit bisherigem Code)
+      var status=msg.status||200;
+      var respHeaders=msg.headers||{};
+      var bodyText=msg.body||'';
+      return {
+        ok:status>=200&&status<300,
+        status:status,
+        headers:{get:function(k){
+          var lk=k.toLowerCase();
+          for(var h in respHeaders){if(h.toLowerCase()===lk)return respHeaders[h]}
+          return null;
+        }},
+        text:function(){return Promise.resolve(bodyText)},
+        json:function(){return Promise.resolve(JSON.parse(bodyText))},
+        body:null
+      };
+    });
+  }
+  // Fallback: normaler fetch für /data/ etc.
+  if(shouldUseInsecureProxy(cfg)){
+    var h=Object.assign({},o.headers||{});
+    h['X-Target-Url']=target;
+    o.headers=h;
+    return fetch('/proxy-insecure',o);
+  }
+  return fetch(target,o);
+}
+function keyLabel(key){
+  var k=(key||'').trim();
+  if(!k)return'kein-key';
+  if(k.length<=10)return k;
+  return k.slice(0,4)+'…'+k.slice(-4);
+}
+function infoText(label){
+  var l=(label||'').toLowerCase().trim();
+  var m={
+    'gesendet':'Gesamtzahl aller abgeschickten HTTP-Requests seit Start. Enthält erfolgreiche + fehlgeschlagene + noch laufende.',
+    'ok':'Anzahl Requests, die mit HTTP 200 und gültigem JSON beantwortet wurden. Nur diese fließen in Latenz-/Token-Statistiken ein.',
+    'fehler':'Requests, die fehlgeschlagen sind: HTTP 4xx (z.B. 429 Rate-Limit), 5xx (Server-Fehler), Netzwerk-Fehler (DNS, Connection refused) oder Timeout.',
+    'aktiv':'Requests, die gerade in-flight sind — abgeschickt, aber noch keine Antwort erhalten. Bei Streaming zählt der Request bis zum letzten Chunk.',
+    'rps':'Gemessene Requests pro Sekunde = (OK + Fehler) ÷ Laufzeit in Sekunden. Zeigt den tatsächlichen Durchsatz, nicht den konfigurierten.',
+    'req/s':'Gemessene Requests pro Sekunde = (OK + Fehler) ÷ Laufzeit in Sekunden. Zeigt den tatsächlichen Durchsatz, nicht den konfigurierten.',
+    'c-tok/s':'Completion-Tokens pro Sekunde über gesamte Laufzeit = Σ Completion-Tokens ÷ Laufzeit. Misst die LLM-Generierungsleistung.',
+    't-tok/s':'Gesamte Tokens (Prompt + Completion) pro Sekunde über die Laufzeit. Zeigt die volle I/O-Last am Modell.',
+    'p-tok/s':'Prompt-Tokens pro Sekunde über die Laufzeit. Bei kurzen Prompts niedrig, bei langen Kontexten ein Bottleneck-Indikator.',
+    'delay soll':'Konfiguriertes Sende-Intervall in Millisekunden. Alle <Delay> ms wird eine neue Batch von Requests abgefeuert. 0 = sofort nächste Batch nach Abfeuern.',
+    'δsend ø':'Tatsächlicher Durchschnitt der Zeitabstände zwischen aufeinanderfolgenden Request-Dispatches (ms). Sollte nahe am konfigurierten Delay liegen — weicht es ab, ist der Browser/Netzwerk überlastet.',
+    'δsend p50':'Median (50. Perzentil) der Zeitabstände zwischen Dispatches. Robuster als der Durchschnitt, da Ausreißer ignoriert werden.',
+    'requests':'Gesamtzahl aller abgeschickten Requests über alle Karten im Dashboard.',
+    'erfolgsrate':'Anteil erfolgreicher Requests (HTTP 200 mit gültigem JSON) in Prozent. 100% = keine Fehler. Werte unter 95% deuten auf Rate-Limiting oder Serverlast hin.',
+    'fehlerrate':'Anteil fehlerhafter Requests in Prozent = 100% − Erfolgsrate. Hohe Werte zeigen Rate-Limiting (429), Serverüberlastung (503) oder Netzwerkprobleme.',
+    'rpm':'Requests pro Minute (RPM): Vom LiteLLM-Server gemeldetes Limit über den Response-Header x-litellm-key-rpm-limit. Wert 0 = Header nicht empfangen.',
+    'rpm limit':'Requests pro Minute: Vom Server pro API-Key konfiguriertes Maximum (Header: x-litellm-key-rpm-limit). Wird erst bei ausreichend vielen Requests spürbar.',
+    'max parallel':'Maximale gleichzeitige Requests, die der Server für diesen API-Key erlaubt (Header: x-ratelimit-api_key-limit-max_parallel_requests). Wird in-flight überschritten, antwortet der Server mit 429.',
+    'max∥':'Maximale gleichzeitige Requests für diesen Key laut Server-Header. Wenn In-Flight diesen Wert übersteigt → 429 Rate-Limit-Fehler.',
+    '∥ frei':'Verbleibende parallele Slots laut letztem Server-Response (Header: x-ratelimit-remaining-max_parallel_requests). Wert 0 = nächster Request bekommt 429.',
+    '∥ übrig':'Verbleibende parallele Slots laut letztem Server-Response. Sinkt auf 0, wenn alle erlaubten Parallel-Requests belegt sind.',
+    'in-flight':'Aktuell fliegende Requests: abgeschickt, aber noch ohne Antwort. Wichtig für Laststeuerung — übersteigt dieser Wert Max∥, gibt es 429-Fehler.',
+    'header-rps':'Vom Server über Response-Header gemeldete RPS-Begrenzung (z.B. x-ratelimit-limit-requests).',
+    'avg':'Arithmetisches Mittel der Latenz aller erfolgreichen Requests. Empfindlich für Ausreißer — P50 ist oft aussagekräftiger.',
+    'p50':'Median-Latenz: 50% der Requests sind schneller, 50% langsamer. Robusteste Latenz-Kennzahl.',
+    'p95':'95. Perzentil der Latenz: Nur 5% der Requests sind langsamer. Zeigt die "schlechte" User-Experience.',
+    'p99':'99. Perzentil der Latenz: Nur 1% der Requests sind langsamer. Zeigt Worst-Case-Verhalten unter Last.',
+    'min':'Schnellste gemessene Antwortzeit. Zeigt die theoretisch beste Latenz des Modells ohne Warteschlange.',
+    'max':'Langsamste gemessene Antwortzeit. Oft durch queuing oder Rate-Limiting verursacht.',
+    'stddev':'Standardabweichung der Latenz. Hohe Werte = ungleichmäßige Antwortzeiten, niedrige Werte = stabil.',
+    'erfolg':'Erfolgsrate in Prozent. Werte < 100% deuten auf Rate-Limiting, Timeout oder Serverfehler hin.',
+    'dauer':'Gesamte bisherige Laufzeit des Tests in Sekunden.',
+    'gesamt tok':'Summe aller Prompt- und Completion-Tokens. Zeigt die gesamte I/O-Last am Modell.',
+    'prompt tok':'Summe aller Prompt-Tokens über alle Requests. Beeinflusst die Antwortzeit (mehr Context = langsamer).',
+    'compl tok':'Summe aller Completion-Tokens. Hauptindikator für die generierte Textmenge.',
+    'ø c-tok/req':'Durchschnittliche Completion-Tokens pro Request. Hängt von max_tokens und Prompt ab.',
+    'ø tok/s/req':'Durchschnittliche Generierungsgeschwindigkeit pro einzelnem Request (Completion-Tokens ÷ Latenz).',
+    'ø p-tok/req':'Durchschnittliche Prompt-Tokens pro Request.',
+    'ø t-tok/req':'Durchschnittliche Gesamt-Tokens pro Request (Prompt + Completion).',
+    'i/o ratio':'Verhältnis Input/Output = Prompt-Tokens ÷ Completion-Tokens. Hoch = viel Kontext, wenig Antwort.',
+    'c-tok min':'Minimale Completion-Tokens in einem einzelnen Response.',
+    'c-tok max':'Maximale Completion-Tokens in einem einzelnen Response.',
+    'c-tok p50':'Median der Completion-Tokens pro Response.',
+    'c-tok p95':'95. Perzentil der Completion-Tokens — zeigt die längsten Antworten.',
+    'ø tok/s/req':'Mittlere Token-Generierungsrate pro Request in Tok/s.',
+    'tok/s p50':'Median der Tok/s-Werte über alle Requests.',
+    'tok/s p95':'95. Perzentil der Tok/s — obere Leistungsgrenze der Generierung.',
+    'tok/s peak':'Höchster gemessener Tok/s-Wert in einem einzelnen Request.',
+    'peak tok/s':'Höchster gemessener Tok/s-Wert über alle Requests aller Karten.',
+    'ø ttft':'Durchschnittliche Time-to-First-Token: Zeit vom Absenden bis zum Empfang des ersten Tokens (nur bei Streaming).',
+    'ttft p50':'Median der Time-to-First-Token — zeigt die typische Wartezeit auf das erste Token.',
+    'ttft p95':'95. Perzentil der TTFT — zeigt Worst-Case-Wartezeit auf erstes Token.',
+    'ttft min':'Schnellste TTFT — bestes Szenario für interaktive Nutzung.',
+    'ttft max':'Langsamste TTFT — zeigt maximale Wartezeit.',
+    'total req':'Gesamtzahl Requests in dieser Karte.',
+    'fails':'Fehlgeschlagene Requests (4xx + 5xx + Netzwerk + Timeout).',
+    'elapsed':'Bisherige Laufzeit dieser Karte in Sekunden.',
+    'modelle':'Anzahl aktiver Modell-Karten im Dashboard.',
+    'ok/s vorteil':'Prozentuale Verbesserung der OK-Rate/s zwischen höchster und niedrigster Priorität.',
+    'ø latenz reduktion':'Prozentuale Latenz-Verbesserung der höchsten vs niedrigsten Priorität.',
+    'p50 latenz reduktion':'Prozentuale P50-Latenz-Verbesserung der höchsten vs niedrigsten Priorität.',
+    '4xx':'Anzahl Client-Fehler (HTTP 400-499). Häufigster Grund: 429 = Rate-Limit überschritten. Auch 401 (ungültiger Key) oder 422 (ungültige Parameter).',
+    '5xx':'Anzahl Server-Fehler (HTTP 500-599). Typisch: 502 Bad Gateway, 503 Service Unavailable (Modell überlastet).',
+    'netzwerk':'Fehler ohne HTTP-Status: DNS-Auflösung fehlgeschlagen, Connection refused, TLS-Fehler, CORS blockiert.',
+    'timeout':'Requests, die das Browser-Timeout erreicht haben, ohne eine Antwort zu erhalten.'
+  };
+  return m[l]||'Kennzahl für Last, Geschwindigkeit oder Stabilität dieses Tests.';
+}
+function infoIcon(label){
+  return'<span class="info-i" title="'+esc(infoText(label))+'">i</span>';
+}
+function ensureInfoIcons(){
+  var nodes=document.querySelectorAll('.k,.l,dt');
+  for(var i=0;i<nodes.length;i++){
+    var n=nodes[i];
+    if(n.dataset.infoDone==='1')continue;
+    var raw=(n.textContent||'').trim();
+    if(!raw)continue;
+    n.insertAdjacentHTML('beforeend',infoIcon(raw));
+    n.dataset.infoDone='1';
+  }
+}
 
 var BENCHMARK_PRESETS={
   latency:function(base){
+    // Sequentiell, 1 Req alle 500ms, max 1 parallel → saubere Baseline-Latenzen ohne Queuing
     return [{
-      url:base.url,key:base.key,model:base.model||'gpt-oss:20b',
+      url:base.url,key:base.key,model:base.model||'Qwen/Qwen3-8B',
       sysPrompt:'',prompt:'Antworte kurz und präzise in einem Satz.',
-      conc:1,batch:1,delay:200,total:60,maxTok:64,temp:0.2,priority:0,stream:false
+      batch:1,delay:500,total:60,conc:1,maxTok:10,temp:0.2,priority:0,stream:false
     }];
   },
   throughput:function(base){
+    // Dauerfeuer: Batch 10, kein Delay, 40 parallel (typisches max_parallel_requests Limit)
     return [{
-      url:base.url,key:base.key,model:base.model||'gpt-oss:20b',
+      url:base.url,key:base.key,model:base.model||'Qwen/Qwen3-8B',
       sysPrompt:'',prompt:'Erzeuge eine detaillierte Antwort mit mehreren Punkten.',
-      conc:16,batch:4,delay:0,total:0,maxTok:256,temp:0.7,priority:0,stream:true
+      batch:10,delay:100,total:500,conc:40,maxTok:60,temp:0.7,priority:0,stream:true
     }];
   },
-  priority:function(base){
+  parallel_limit:function(base){
+    // 3 Karten mit steigender Parallelität → zeigt wo max_parallel_requests greift (429 Fehler)
     return [
       {
-        url:base.url,key:base.key1||base.key,model:base.model||'gpt-oss:20b',
-        sysPrompt:'',prompt:'Schreibe eine kompakte Zusammenfassung in 5 Stichpunkten.',
-        conc:8,batch:2,delay:0,total:300,maxTok:160,temp:0.6,priority:0,stream:true
+        url:base.url,key:base.key,model:base.model||'Qwen/Qwen3-8B',
+        sysPrompt:'',prompt:'Hi',
+        batch:20,delay:100,total:200,conc:20,maxTok:10,temp:0.1,priority:0,stream:false
       },
       {
-        url:base.url,key:base.key2||base.key,model:base.model||'gpt-oss:20b',
-        sysPrompt:'',prompt:'Schreibe eine kompakte Zusammenfassung in 5 Stichpunkten.',
-        conc:8,batch:2,delay:0,total:300,maxTok:160,temp:0.6,priority:5,stream:true
+        url:base.url,key:base.key,model:base.model||'Qwen/Qwen3-8B',
+        sysPrompt:'',prompt:'Hi',
+        batch:40,delay:100,total:200,conc:40,maxTok:10,temp:0.1,priority:0,stream:false
+      },
+      {
+        url:base.url,key:base.key,model:base.model||'Qwen/Qwen3-8B',
+        sysPrompt:'',prompt:'Hi',
+        batch:80,delay:100,total:200,conc:80,maxTok:10,temp:0.1,priority:0,stream:false
+      }
+    ];
+  },
+  rpm_limit:function(base){
+    // Karte 1: 2 Req/s × 60s = 120 RPM → unter typischem Limit
+    // Karte 2: 5 Req/s × 60s = 300 RPM → über RPM-60 Limit
+    return [
+      {
+        url:base.url,key:base.key,model:base.model||'Qwen/Qwen3-8B',
+        sysPrompt:'',prompt:'Hi',
+        batch:1,delay:500,total:120,conc:5,maxTok:5,temp:0.1,priority:0,stream:false
+      },
+      {
+        url:base.url,key:base.key,model:base.model||'Qwen/Qwen3-8B',
+        sysPrompt:'',prompt:'Hi',
+        batch:5,delay:1000,total:400,conc:10,maxTok:5,temp:0.1,priority:0,stream:false
+      }
+    ];
+  },
+  key_compare:function(base){
+    // Gleiche Last auf zwei Keys → zeigt Unterschied bei max_parallel / RPM Limits
+    return [
+      {
+        url:base.url,key:base.key1||base.key,model:base.model||'Qwen/Qwen3-8B',
+        sysPrompt:'',prompt:'Hi',
+        batch:10,delay:200,total:300,conc:30,maxTok:10,temp:0.1,priority:0,stream:false
+      },
+      {
+        url:base.url,key:base.key2||base.key,model:base.model||'Qwen/Qwen3-8B',
+        sysPrompt:'',prompt:'Hi',
+        batch:10,delay:200,total:300,conc:30,maxTok:10,temp:0.1,priority:0,stream:false
       }
     ];
   }
@@ -255,24 +548,31 @@ function addCard(cfg){
       '<textarea id="pr'+id+'" rows="2">'+(p.prompt||'What is the capital of France? Answer in one sentence.')+'</textarea>'+
     '</div></div>'+
     '<div class="row">'+
-      '<div class="field"><label>Parallelität</label><input type="number" id="cc'+id+'" min="1" max="500" value="'+(p.conc||3)+'"></div>'+
-      '<div class="field"><label>Batch Size</label><input type="number" id="bs'+id+'" min="1" max="100" value="'+(p.batch||1)+'" title="Requests pro Burst je Worker"></div>'+
-      '<div class="field"><label>Delay (ms)</label><input type="number" id="dy'+id+'" min="0" max="300000" value="'+(p.delay||0)+'"></div>'+
+      '<div class="field"><label>Batch Size</label><input type="number" id="bs'+id+'" min="1" max="100" value="'+(p.batch||1)+'" title="Requests pro Tick"></div>'+
+      '<div class="field"><label>Sendeintervall (ms)</label><input type="number" id="dy'+id+'" min="0" max="300000" value="'+(p.delay||0)+'"></div>'+
       '<div class="field"><label>Requests (0=∞)</label><input type="number" id="tr'+id+'" min="0" max="999999" value="'+(p.total!==undefined?p.total:50)+'"></div>'+
     '</div>'+
     '<div class="row">'+
+      '<div class="field"><label>Max Parallel (0=∞)</label><input type="number" id="co'+id+'" min="0" max="10000" value="'+(p.conc!==undefined?p.conc:0)+'" title="Maximale gleichzeitige In-Flight-Requests. 0 = unbegrenzt. Wird dieser Wert erreicht, wartet der Loader bis ein Request fertig ist."></div>'+
       '<div class="field"><label>Max Tokens</label><input type="number" id="mt'+id+'" min="1" max="32768" value="'+(p.maxTok||60)+'"></div>'+
       '<div class="field"><label>Temperatur</label><input type="number" id="tp'+id+'" min="0" max="2" step="0.1" value="'+(p.temp!==undefined?p.temp:0.7)+'"></div>'+
-      '<div class="field"><label>Priorität</label><input type="number" id="pri'+id+'" min="0" max="10" value="'+(p.priority!==undefined?p.priority:0)+'" title="0=höchste"></div>'+
+      '<div class="field"><label>Priorität (kleiner = höher)</label><input type="number" id="pri'+id+'" min="0" max="100000" value="'+(p.priority!==undefined?p.priority:0)+'" title="0=höchste"></div>'+
       '<div class="field"><label>Stream</label>'+
         '<select id="st'+id+'"><option value="0"'+(p.stream?'':' selected')+'>Nein</option><option value="1"'+(p.stream?' selected':'')+'>Ja</option></select>'+
       '</div>'+
+    '</div>'+
+    '<div class="row">'+
+      '<div class="field"><label>SSL Verify</label>'+
+        '<select id="sv'+id+'"><option value="0"'+(p.sslVerify===true?'':' selected')+'>False</option><option value="1"'+(p.sslVerify===true?' selected':'')+'>True</option></select>'+
+      '</div>'+
+      '<div class="field"><label>API Endpoint</label><input value="/chat/completions" readonly title="LiteLLM Standard-Endpunkt"></div>'+
     '</div>'+
   '</div>'+
   '<div class="card-acts">'+
     '<button class="bs bsm" data-start="'+id+'">▶ Start</button>'+
     '<button class="bd bsm" data-stop="'+id+'">■ Stop</button>'+
     '<button class="bo bsm" data-res="'+id+'">↺ Reset</button>'+
+    '<button class="bo bsm" data-toggle="'+id+'" title="Einstellungen während des Tests ändern">✏️ Edit</button>'+
     '<span class="spacer"></span>'+
     '<button class="bo bsm" data-load="'+id+'">Modelle laden</button>'+
   '</div>'+
@@ -351,7 +651,10 @@ function addCard(cfg){
     tpsPerReq:[],peakTps:0,
     throughputBins:[],
     errs:[],e4:0,e5:0,eN:0,eT:0,
-    t0:null,tEnd:null,model:'',aborts:[]};
+    t0:null,tEnd:null,model:'',aborts:[],
+    keyLabel:keyLabel(p.key||''),priority:(p.priority!==undefined?p.priority:0),delayCfg:(p.delay||0),dispatchTs:[],serverRpsLimit:0,
+    serverRpmLimit:0,serverMaxParallel:0,serverParallelRemaining:0,
+    loopTimer:null,nextSendAt:0};
   return id;
 }
 
@@ -359,37 +662,66 @@ function removeCard(id){doStop(id);var c=C[id];if(c&&c.el)c.el.remove();delete C
 function dupCard(id){addCard(getConf(id));toast('Karte dupliziert')}
 
 function getConf(id){
+  var normUrl=normalizeApiUrl($$('url'+id).value||'');
+  $$('url'+id).value=normUrl;
   return{
-    url:($$('url'+id).value||'').replace(/\/+$/,''),
+    url:normUrl,
     key:$$('key'+id).value||'',
     model:$$('m'+id).value,
     sysPrompt:$$('sp'+id).value,
     prompt:$$('pr'+id).value,
-    conc:parseInt($$('cc'+id).value)||1,
     batch:parseInt($$('bs'+id).value)||1,
     delay:parseInt($$('dy'+id).value)||0,
     total:parseInt($$('tr'+id).value)||0,
+    conc:parseInt($$('co'+id).value)||0,
     maxTok:parseInt($$('mt'+id).value)||60,
     temp:parseFloat($$('tp'+id).value),
     priority:parseInt($$('pri'+id).value)||0,
-    stream:$$('st'+id).value==='1'
+    stream:$$('st'+id).value==='1',
+    sslVerify:$$('sv'+id).value==='1'
   };
+}
+// Re-read mutable fields from inputs during a running test (live-edit support)
+function getLiveConf(id,base){
+  var el=$$('bs'+id);if(!el)return base; // card removed
+  return Object.assign({},base,{
+    batch:parseInt($$('bs'+id).value)||1,
+    delay:parseInt($$('dy'+id).value)||0,
+    total:parseInt($$('tr'+id).value)||0,
+    conc:parseInt($$('co'+id).value)||0,
+    maxTok:parseInt($$('mt'+id).value)||60,
+    temp:parseFloat($$('tp'+id).value),
+    priority:parseInt($$('pri'+id).value)||0,
+    stream:$$('st'+id).value==='1',
+    prompt:$$('pr'+id).value,
+    sysPrompt:$$('sp'+id).value,
+  });
 }
 
 function testCard(id){
   var cfg=getConf(id),tit=$$('tit'+id),prev=tit.textContent;tit.textContent='⏳ Teste…';
-  fetch(cfg.url+'/models',{headers:{'Authorization':'Bearer '+cfg.key}})
+  apiFetch(cfg,'/models',{headers:{'Authorization':'Bearer '+cfg.key}})
     .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);tit.textContent='✓ Verbunden';setTimeout(function(){tit.textContent=cfg.model||prev},2000)})
-    .catch(function(e){tit.textContent='✗ '+e.message;setTimeout(function(){tit.textContent=cfg.model||prev},3000)});
+    .catch(function(e){
+      var m=errMsg(e);
+      tit.textContent='✗ '+m;
+      toast('Verbindungstest fehlgeschlagen: '+m.slice(0,140),'err');
+      setTimeout(function(){tit.textContent=cfg.model||prev},3000)
+    });
 }
 function loadModels(id){
   var cfg=getConf(id),tit=$$('tit'+id);
-  fetch(cfg.url+'/models',{headers:{'Authorization':'Bearer '+cfg.key}})
+  apiFetch(cfg,'/models',{headers:{'Authorization':'Bearer '+cfg.key}})
     .then(function(r){return r.json()}).then(function(d){
       var ms=(d.data||[]).map(function(m){return m.id}).filter(function(x){return x.indexOf('*')===-1});
       $$('mdl'+id).innerHTML=ms.map(function(m){return'<option value="'+esc(m)+'">'}).join('');
       tit.textContent=ms.length+' Modelle';setTimeout(function(){tit.textContent=cfg.model||'Neues Modell'},2000);
-    }).catch(function(e){tit.textContent='✗ '+e.message;setTimeout(function(){tit.textContent=cfg.model||'Neues Modell'},3000)});
+    }).catch(function(e){
+      var m=errMsg(e);
+      tit.textContent='✗ '+m;
+      toast('Modelle laden fehlgeschlagen: '+m.slice(0,140),'err');
+      setTimeout(function(){tit.textContent=cfg.model||'Neues Modell'},3000)
+    });
 }
 
 // ════════════════════════════════════════════════
@@ -398,12 +730,35 @@ function loadModels(id){
 function doStart(id){
   var c=C[id];if(!c||c.run)return;
   var cfg=getConf(id);if(!cfg.model){alert('Bitte ein Modell eingeben!');return}
+  if(!cfg.url){toast('API Base URL fehlt','err');return}
   c.run=true;c.model=cfg.model;c.t0=Date.now();c.tEnd=null;
+  c.keyLabel=keyLabel(cfg.key);c.priority=cfg.priority;c.delayCfg=cfg.delay;c.dispatchTs=[];c.serverRpsLimit=0;
+  c.serverRpmLimit=0;c.serverMaxParallel=0;c.serverParallelRemaining=0;
+  c.loopTimer=null;c.nextSendAt=0;
+  // Event-Log: test_start
+  elog('test_start',id,{
+    config:{
+      url:cfg.url,key_label:keyLabel(cfg.key),model:cfg.model,
+      batch:cfg.batch,delay:cfg.delay,total:cfg.total,conc:cfg.conc,
+      maxTok:cfg.maxTok,temp:cfg.temp,priority:cfg.priority,
+      stream:cfg.stream,sslVerify:cfg.sslVerify,
+      sysPrompt:cfg.sysPrompt?cfg.sysPrompt.slice(0,200):'',
+      prompt:cfg.prompt?cfg.prompt.slice(0,200):''
+    }
+  });
   $$('tit'+id).textContent=cfg.model;
   $$('cs'+id).classList.add('vis');$$('body'+id).classList.add('collapsed');
-  for(var i=0;i<cfg.conc;i++)loop(id,cfg);
+  loop(id,cfg);
 }
-function doStop(id){var c=C[id];if(!c)return;c.run=false;for(var i=0;i<c.aborts.length;i++)c.aborts[i].abort();c.aborts=[]}
+function doStop(id){var c=C[id];if(!c)return;
+  var wasRunning=c.run;
+  c.run=false;if(c.loopTimer){clearTimeout(c.loopTimer);c.loopTimer=null}for(var i=0;i<c.aborts.length;i++)c.aborts[i].abort();c.aborts=[];
+  if(wasRunning){
+    elog('test_stop',id,{reason:'manual',sent:c.sent,ok:c.ok,fail:c.fail,active:c.active,
+      elapsed_s:c.t0?((Date.now()-c.t0)/1000):0,
+      serverRpmLimit:c.serverRpmLimit,serverMaxParallel:c.serverMaxParallel});
+  }
+}
 function doReset(id){
   doStop(id);var c=C[id];if(!c)return;
   c.sent=0;c.ok=0;c.fail=0;c.active=0;
@@ -412,12 +767,15 @@ function doReset(id){
   c.promptTokPerReq=[];c.compTokPerReq=[];c.totalTokPerReq=[];
   c.tpsPerReq=[];c.peakTps=0;c.throughputBins=[];
   c.errs=[];c.e4=0;c.e5=0;c.eN=0;c.eT=0;c.t0=null;c.tEnd=null;
+  c.dispatchTs=[];c.serverRpsLimit=0;
+  c.serverRpmLimit=0;c.serverMaxParallel=0;c.serverParallelRemaining=0;
+  c.loopTimer=null;c.nextSendAt=0;
   $$('pb'+id).style.width='0';
   $$('cs'+id).classList.remove('vis');$$('body'+id).classList.remove('collapsed');
 }
 function startAll(){for(var id in C)doStart(+id)}
 function stopAll(){for(var id in C)doStop(+id)}
-function resetAll(){for(var id in C)doReset(+id);LOG=[];toast('Alles zurückgesetzt')}
+function resetAll(){for(var id in C)doReset(+id);LOG=[];ELOG=[];ELOG_SEQ=0;toast('Alles zurückgesetzt')}
 function clearLog(){LOG=[];toast('Log geleert')}
 
 function getFirstCardBase(){
@@ -499,109 +857,380 @@ function deleteBenchmarkProfile(){
 }
 
 // ════════════════════════════════════════════════
-// WORKER LOOP (with batch support)
+// PERSISTENT MODEL CONFIG STORAGE (via /data/ WebDAV)
+// Configs persist as JSON files in Docker volume
 // ════════════════════════════════════════════════
-function loop(id,cfg){
-  var c=C[id];if(!c||!c.run)return;
-  if(cfg.total>0&&c.sent>=cfg.total){
-    if(c.active===0){c.run=false;c.tEnd=Date.now();toast(cfg.model+': Fertig ('+c.ok+'/'+c.sent+' OK)','ok')}
-    return;
-  }
-  // Fire batch
-  var batchN=Math.max(1,cfg.batch);
-  if(cfg.total>0)batchN=Math.min(batchN,cfg.total-c.sent);
-  var promises=[];
-  for(var b=0;b<batchN;b++){
-    if(cfg.total>0&&c.sent>=cfg.total)break;
-    promises.push(fire(id,cfg));
-  }
-  Promise.all(promises).then(function(){
-    if(!c.run)return;
-    if(cfg.delay>0)setTimeout(function(){loop(id,cfg)},cfg.delay);
-    else loop(id,cfg);
+var _modelConfigCache=null;
+var _modelConfigLoading=false;
+
+function modelConfigFileName(name){
+  return 'model_'+name.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß]/g,'_')+'.json';
+}
+
+function fetchModelConfigs(cb){
+  fetch('/data/?'+Date.now()).then(function(r){
+    if(!r.ok){_modelConfigCache={};cb({});return}
+    return r.json();
+  }).then(function(listing){
+    if(!listing){_modelConfigCache={};cb({});return}
+    var files=(listing||[]).filter(function(f){return f.name&&f.name.indexOf('model_')===0&&f.name.indexOf('.json')>0});
+    if(files.length===0){_modelConfigCache={};cb({});return}
+    var results={},pending=files.length;
+    files.forEach(function(f){
+      fetch('/data/'+f.name+'?'+Date.now()).then(function(r){return r.json()}).then(function(data){
+        if(data&&data.name)results[data.name]=data;
+      }).catch(function(){}).then(function(){
+        pending--;
+        if(pending<=0){_modelConfigCache=results;cb(results)}
+      });
+    });
+  }).catch(function(){
+    // Fallback: try localStorage
+    try{_modelConfigCache=JSON.parse(localStorage.getItem(MODEL_CFG_KEY)||'{}');}catch(e){_modelConfigCache={};}
+    cb(_modelConfigCache);
   });
 }
 
+function saveModelConfigToServer(name,data,cb){
+  var fname=modelConfigFileName(name);
+  var payload=JSON.stringify(data,null,2);
+  fetch('/data/'+fname,{method:'PUT',body:payload,headers:{'Content-Type':'application/json'}})
+    .then(function(r){
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      // Also backup to localStorage
+      try{
+        var all=JSON.parse(localStorage.getItem(MODEL_CFG_KEY)||'{}');
+        all[name]=data;
+        localStorage.setItem(MODEL_CFG_KEY,JSON.stringify(all));
+      }catch(e){}
+      if(cb)cb(true);
+    }).catch(function(e){
+      toast('Speichern auf Server fehlgeschlagen: '+e.message+' – nutze localStorage','err');
+      try{
+        var all=JSON.parse(localStorage.getItem(MODEL_CFG_KEY)||'{}');
+        all[name]=data;
+        localStorage.setItem(MODEL_CFG_KEY,JSON.stringify(all));
+      }catch(ex){}
+      if(cb)cb(false);
+    });
+}
+
+function deleteModelConfigFromServer(name,cb){
+  var fname=modelConfigFileName(name);
+  fetch('/data/'+fname,{method:'DELETE'})
+    .then(function(){return})
+    .catch(function(){})
+    .then(function(){
+      try{
+        var all=JSON.parse(localStorage.getItem(MODEL_CFG_KEY)||'{}');
+        delete all[name];
+        localStorage.setItem(MODEL_CFG_KEY,JSON.stringify(all));
+      }catch(e){}
+      if(cb)cb();
+    });
+}
+
+function refreshModelConfigSelect(){
+  fetchModelConfigs(function(configs){
+    var el=$$('modelCfgSelect');
+    if(!el)return;
+    var names=Object.keys(configs).sort();
+    var html='<option value="">Modell-Konfig… ('+names.length+')</option>';
+    for(var i=0;i<names.length;i++)html+='<option value="'+esc(names[i])+'">'+esc(names[i])+'</option>';
+    el.innerHTML=html;
+  });
+}
+
+function pickCardId(action){
+  var ids=Object.keys(C);
+  if(ids.length===0)return null;
+  if(ids.length===1)return +ids[0];
+  var lines=[];
+  for(var i=0;i<ids.length;i++){
+    var id=+ids[i],m=$$('m'+id);
+    lines.push(id+': '+((m&&m.value)?m.value:'Neues Modell'));
+  }
+  var raw=(prompt('Karten-ID für '+action+' wählen:\n'+lines.join('\n'),ids[0])||'').trim();
+  if(!raw)return null;
+  var pick=parseInt(raw,10);
+  if(!C[pick]){toast('Ungültige Karten-ID','err');return null}
+  return pick;
+}
+
+function toModelConfig(cfg){
+  return{
+    url:cfg.url,
+    key:cfg.key,
+    model:cfg.model,
+    sysPrompt:cfg.sysPrompt,
+    prompt:cfg.prompt,
+    batch:cfg.batch,
+    delay:cfg.delay,
+    total:cfg.total,
+    conc:cfg.conc,
+    maxTok:cfg.maxTok,
+    temp:cfg.temp,
+    priority:cfg.priority,
+    stream:cfg.stream,
+    sslVerify:cfg.sslVerify
+  };
+}
+
+function normalizeModelConfig(cfg){
+  var out=Object.assign({},cfg||{});
+  if(out.conc===undefined||out.conc===null||isNaN(parseInt(out.conc,10)))out.conc=0;
+  out.conc=parseInt(out.conc,10)||0;
+  delete out.useQueue;
+  return out;
+}
+
+function saveModelConfig(){
+  var id=pickCardId('Speichern');
+  if(id===null){toast('Keine Karte gewählt','err');return}
+  var cfg=toModelConfig(getConf(id));
+  var defName=cfg.model||'Neues Modell';
+  var name=(prompt('Modell-Konfig speichern als:',defName)||'').trim();
+  if(!name){toast('Kein Name','err');return}
+  var data={name:name,createdAt:new Date().toISOString(),config:cfg};
+  saveModelConfigToServer(name,data,function(){
+    refreshModelConfigSelect();
+    toast('Modell-Konfig gespeichert: '+name);
+  });
+}
+
+function loadModelConfig(){
+  var name=$$('modelCfgSelect').value;
+  if(!name){toast('Modell-Konfig wählen','err');return}
+  fetchModelConfigs(function(all){
+    var entry=all[name];
+    var cfg=entry&&entry.config?entry.config:entry;
+    cfg=normalizeModelConfig(cfg);
+    if(!cfg||!cfg.model){toast('Modell-Konfig ungültig','err');return}
+    addCard(cfg);
+    toast('Modell-Konfig geladen: '+name);
+  });
+}
+
+function deleteModelConfig(){
+  var name=$$('modelCfgSelect').value;
+  if(!name){toast('Modell-Konfig wählen','err');return}
+  if(!confirm('Modell-Konfig "'+name+'" wirklich löschen?'))return;
+  deleteModelConfigFromServer(name,function(){
+    refreshModelConfigSelect();
+    toast('Modell-Konfig gelöscht: '+name);
+  });
+}
+
+// ════════════════════════════════════════════════
+// WORKER LOOP – rein zeitgesteuert
+// Feuert alle <delay> ms genau <batch> Requests ab,
+// unabhängig davon wie viele noch in-flight sind.
+// ════════════════════════════════════════════════
+function loop(id,cfg){
+  var c=C[id];
+  c.loopTimer=null;
+  if(!c||!c.run)return;
+  // Re-read mutable settings from inputs on each iteration (live-edit)
+  var live=getLiveConf(id,cfg);
+  if(live.total>0&&c.sent>=live.total){
+    if(c.active===0){
+      c.run=false;c.tEnd=Date.now();
+      elog('test_done',id,{sent:c.sent,ok:c.ok,fail:c.fail,
+        elapsed_s:c.t0?((c.tEnd-c.t0)/1000):0,
+        serverRpmLimit:c.serverRpmLimit,serverMaxParallel:c.serverMaxParallel,serverParallelRemaining:c.serverParallelRemaining});
+      toast(live.model+': Fertig ('+c.ok+'/'+c.sent+' OK)','ok');
+    }
+    return;
+  }
+  var batchN=Math.max(1,live.batch);
+  if(live.total>0) batchN=Math.min(batchN,live.total-c.sent);
+  for(var b=0;b<batchN;b++){
+    if(live.total>0&&c.sent>=live.total)break;
+    if(live.conc>0&&c.active>=live.conc)break; // Parallellimit einhalten
+    fire(id,live);
+  }
+  scheduleLoop(id,live);
+}
+
+function scheduleLoop(id,cfg){
+  var c=C[id];
+  if(!c||!c.run||c.loopTimer)return;
+  if(cfg.total>0&&c.sent>=cfg.total)return;
+  var delay=Math.max(0,cfg.delay||0);
+  if(delay>0){
+    var now=performance.now();
+    if(!c.nextSendAt) c.nextSendAt=now+delay;
+    else c.nextSendAt+=delay;
+    // wenn zu weit hinterher (>2x delay) → reset
+    if(c.nextSendAt<now-delay) c.nextSendAt=now+delay;
+    var wait=Math.max(1,c.nextSendAt-now);
+    c.loopTimer=setTimeout(function(){loop(id,cfg)},wait);
+  }else{
+    c.loopTimer=setTimeout(function(){loop(id,cfg)},0);
+  }
+}
+
 function fire(id,cfg){
-  var c=C[id],ac=new AbortController();
-  c.aborts.push(ac);c.sent++;c.active++;
+  var c=C[id];
+  c.sent++;c.active++;
+  var sentAt=Date.now();
+  c.dispatchTs.push(sentAt);
+  if(c.dispatchTs.length>6000)c.dispatchTs.shift();
   var t0=performance.now();
   var msgs=[];
   if(cfg.sysPrompt)msgs.push({role:'system',content:cfg.sysPrompt});
   msgs.push({role:'user',content:cfg.prompt});
   var body=JSON.stringify({model:cfg.model,messages:msgs,max_tokens:cfg.maxTok,temperature:cfg.temp,stream:cfg.stream,priority:cfg.priority});
+  var endpoint='/chat/completions';
+  var target=(cfg.url||'')+endpoint;
+  var hdrs={'Content-Type':'application/json','Authorization':'Bearer '+cfg.key};
 
-  return fetch(cfg.url+'/chat/completions',{
-    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
-    body:body,signal:ac.signal
-  }).then(function(resp){
-    if(!resp.ok)return resp.text().then(function(t){var code=resp.status;throw{message:'HTTP '+code+': '+t.slice(0,120),code:code}});
-    if(cfg.stream){
-      var ttfb=performance.now()-t0,firstChunk=true;
-      var reader=resp.body.getReader(),dec=new TextDecoder(),buf='',text='',sTok=0,pTok=0;
-      function read(){
-        return reader.read().then(function(res){
-          if(res.done)return;
-          if(firstChunk){ttfb=performance.now()-t0;firstChunk=false}
-          buf+=dec.decode(res.value,{stream:true});
-          var lines=buf.split('\n');buf=lines.pop();
-          for(var i=0;i<lines.length;i++){
-            var line=lines[i];
-            if(line.indexOf('data: ')!==0||line.indexOf('[DONE]')!==-1)continue;
-            try{var ch=JSON.parse(line.slice(6));
-              var d=ch.choices&&ch.choices[0]&&ch.choices[0].delta&&ch.choices[0].delta.content;
-              if(d){sTok++;text+=d}
-              if(ch.usage){sTok=ch.usage.completion_tokens||sTok;pTok=ch.usage.prompt_tokens||pTok}
-            }catch(e){}
-          }
-          return read();
-        });
+  // ─── Streaming via WebSocket ───
+  if(cfg.stream){
+    return wsEnsureReady().then(function(){
+      return new Promise(function(resolve,reject){
+        if(!WS.ready||!WS.sock||WS.sock.readyState!==1){
+          return reject(new Error('WebSocket nicht verbunden (state='+(WS.sock?WS.sock.readyState:'null')+')'));
+        }
+        var wsId=String(++WS.seq);
+        var text='',sTok=0,pTok=0,ttfb=0,firstChunk=true;
+        WS.cbs[wsId]={
+          resolve:function(msg){
+            // stream_end: Ergebnis verarbeiten
+            var lat=performance.now()-t0;
+            var tps=sTok>0&&lat>0?sTok/(lat/1000):0;
+            var tTok=pTok+sTok;
+            c.ok++;c.lats.push(lat);c.ttfbs.push(ttfb);
+            c.promptTok+=pTok;c.compTok+=sTok;c.totalTok+=tTok;
+            c.promptTokPerReq.push(pTok);c.compTokPerReq.push(sTok);c.totalTokPerReq.push(tTok);
+            c.tpsPerReq.push(tps);if(tps>c.peakTps)c.peakTps=tps;
+            recordThroughput(c,sTok);
+            c.tl.push({t:Date.now(),lat:lat,ok:true,tok:sTok});
+            addLog(cfg.model,true,lat,ttfb,pTok,sTok,tTok,tps,cfg.priority,cfg.batch,text.slice(0,120));
+            elog('req_ok',id,{lat_ms:Math.round(lat),ttfb_ms:Math.round(ttfb),p_tok:pTok,c_tok:sTok,t_tok:tTok,
+              tps:Math.round(tps*10)/10,stream:true,sent:c.sent,ok:c.ok,active:c.active,
+              rpm_limit:c.serverRpmLimit,max_parallel:c.serverMaxParallel,parallel_remaining:c.serverParallelRemaining,
+              text:text.slice(0,80)});
+            resolve();
+          },
+          reject:reject,
+          onStart:function(msg){
+            // Status + Headers aus stream_start
+            var status=msg.status||200;
+            var respHeaders=msg.headers||{};
+            function hget(k){var lk=k.toLowerCase();for(var h in respHeaders){if(h.toLowerCase()===lk)return respHeaders[h]}return null}
+            var lim=hget('x-ratelimit-limit-requests')||hget('x-ratelimit-rps')||hget('x-litellm-rps')||'';
+            var limN=parseFloat(lim);if(!isNaN(limN)&&limN>0)c.serverRpsLimit=limN;
+            var rpm=parseFloat(hget('x-litellm-key-rpm-limit')||'');if(!isNaN(rpm)&&rpm>0)c.serverRpmLimit=rpm;
+            var maxP=parseFloat(hget('x-ratelimit-api_key-limit-max_parallel_requests')||'');if(!isNaN(maxP)&&maxP>0)c.serverMaxParallel=maxP;
+            var remP=parseFloat(hget('x-ratelimit-api_key-remaining-max_parallel_requests')||'');if(!isNaN(remP))c.serverParallelRemaining=remP;
+            if(status<200||status>=300){
+              delete WS.cbs[wsId];
+              reject({message:'HTTP '+status,code:status});
+            }
+          },
+          onChunk:function(raw){
+            if(firstChunk){ttfb=performance.now()-t0;firstChunk=false}
+            var lines=raw.split('\n');
+            for(var i=0;i<lines.length;i++){
+              var line=lines[i];
+              if(line.indexOf('data: ')!==0||line.indexOf('[DONE]')!==-1)continue;
+              try{var ch=JSON.parse(line.slice(6));
+                var d=ch.choices&&ch.choices[0]&&ch.choices[0].delta&&ch.choices[0].delta.content;
+                if(d){sTok++;text+=d}
+                if(ch.usage){sTok=ch.usage.completion_tokens||sTok;pTok=ch.usage.prompt_tokens||pTok}
+              }catch(e){}
+            }
+          },
+          chunks:[],status:0,headers:{}
+        };
+        try{
+          WS.sock.send(JSON.stringify({id:wsId,url:target,method:'POST',headers:hdrs,body:body,stream:true}));
+        }catch(e){
+          delete WS.cbs[wsId];
+          reject(new Error('WS send failed: '+e.message));
+        }
+      });
+    }).catch(function(e){
+      var lat=performance.now()-t0;c.fail++;c.lats.push(lat);
+      c.tl.push({t:Date.now(),lat:lat,ok:false,tok:0});
+      var m=errMsg(e),code=e.code||0,cat='net';
+      if(code>=400&&code<500){c.e4++;cat='4xx'}
+      else if(code>=500){c.e5++;cat='5xx'}
+      else if(m.toLowerCase().indexOf('timeout')!==-1){c.eT++;cat='timeout'}
+      else{c.eN++}
+      c.errs.push({t:Date.now(),msg:m.slice(0,5000),cat:cat});
+      addLog(cfg.model,false,lat,null,0,0,0,0,cfg.priority,cfg.batch,m.slice(0,600));
+      elog('req_fail',id,{lat_ms:Math.round(lat),http_code:code,category:cat,error:m.slice(0,500),
+        sent:c.sent,ok:c.ok,fail:c.fail,active:c.active,
+        rpm_limit:c.serverRpmLimit,max_parallel:c.serverMaxParallel,parallel_remaining:c.serverParallelRemaining});
+      if(c.fail<=3||c.fail%25===0)toast(cfg.model+': '+m.slice(0,120),'err');
+    }).then(function(){
+      c.active--;
+      if(cfg.total>0&&c.sent>=cfg.total&&c.active===0){
+        c.run=false;c.tEnd=Date.now();
+        elog('test_done',id,{sent:c.sent,ok:c.ok,fail:c.fail,
+          elapsed_s:c.t0?((c.tEnd-c.t0)/1000):0,
+          serverRpmLimit:c.serverRpmLimit,serverMaxParallel:c.serverMaxParallel});
+        toast(cfg.model+': Fertig','ok');
       }
-      return read().then(function(){
-        var lat=performance.now()-t0;
-        var tps=sTok>0&&lat>0?sTok/(lat/1000):0;
-        var tTok=pTok+sTok;
-        c.ok++;c.lats.push(lat);c.ttfbs.push(ttfb);
-        c.promptTok+=pTok;c.compTok+=sTok;c.totalTok+=tTok;
-        c.promptTokPerReq.push(pTok);c.compTokPerReq.push(sTok);c.totalTokPerReq.push(tTok);
-        c.tpsPerReq.push(tps);if(tps>c.peakTps)c.peakTps=tps;
-        recordThroughput(c,sTok);
-        c.tl.push({t:Date.now(),lat:lat,ok:true,tok:sTok});
-        addLog(cfg.model,true,lat,ttfb,pTok,sTok,tTok,tps,cfg.priority,cfg.batch,text.slice(0,120));
-      });
-    }else{
-      return resp.json().then(function(data){
-        var lat=performance.now()-t0;
-        var text=(data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||'';
-        var u=data.usage||{};
-        var pTok=u.prompt_tokens||0,sTok=u.completion_tokens||0,tTok=u.total_tokens||(pTok+sTok);
-        var tps=sTok>0&&lat>0?sTok/(lat/1000):0;
-        c.ok++;c.lats.push(lat);
-        c.promptTok+=pTok;c.compTok+=sTok;c.totalTok+=tTok;
-        c.promptTokPerReq.push(pTok);c.compTokPerReq.push(sTok);c.totalTokPerReq.push(tTok);
-        c.tpsPerReq.push(tps);if(tps>c.peakTps)c.peakTps=tps;
-        recordThroughput(c,sTok);
-        c.tl.push({t:Date.now(),lat:lat,ok:true,tok:sTok});
-        addLog(cfg.model,true,lat,null,pTok,sTok,tTok,tps,cfg.priority,cfg.batch,text.slice(0,120));
-      });
-    }
+    });
+  }
+
+  // ─── Non-Streaming via WebSocket ───
+  return wsFetch(target,'POST',hdrs,body,false).then(function(msg){
+    var status=msg.status||200;
+    var respHeaders=msg.headers||{};
+    function hget(k){var lk=k.toLowerCase();for(var h in respHeaders){if(h.toLowerCase()===lk)return respHeaders[h]}return null}
+    var lim=hget('x-ratelimit-limit-requests')||hget('x-ratelimit-rps')||hget('x-litellm-rps')||'';
+    var limN=parseFloat(lim);if(!isNaN(limN)&&limN>0)c.serverRpsLimit=limN;
+    var rpm=parseFloat(hget('x-litellm-key-rpm-limit')||'');if(!isNaN(rpm)&&rpm>0)c.serverRpmLimit=rpm;
+    var maxP=parseFloat(hget('x-ratelimit-api_key-limit-max_parallel_requests')||'');if(!isNaN(maxP)&&maxP>0)c.serverMaxParallel=maxP;
+    var remP=parseFloat(hget('x-ratelimit-api_key-remaining-max_parallel_requests')||'');if(!isNaN(remP))c.serverParallelRemaining=remP;
+    if(status<200||status>=300){var code=status;throw{message:'HTTP '+code+': '+(msg.body||'').slice(0,5000),code:code}}
+    var data=JSON.parse(msg.body||'{}');
+    var lat=performance.now()-t0;
+    var text=(data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||'';
+    var u=data.usage||{};
+    var pTok=u.prompt_tokens||0,sTok=u.completion_tokens||0,tTok=u.total_tokens||(pTok+sTok);
+    var tps=sTok>0&&lat>0?sTok/(lat/1000):0;
+    c.ok++;c.lats.push(lat);
+    c.promptTok+=pTok;c.compTok+=sTok;c.totalTok+=tTok;
+    c.promptTokPerReq.push(pTok);c.compTokPerReq.push(sTok);c.totalTokPerReq.push(tTok);
+    c.tpsPerReq.push(tps);if(tps>c.peakTps)c.peakTps=tps;
+    recordThroughput(c,sTok);
+    c.tl.push({t:Date.now(),lat:lat,ok:true,tok:sTok});
+    addLog(cfg.model,true,lat,null,pTok,sTok,tTok,tps,cfg.priority,cfg.batch,text.slice(0,120));
+    elog('req_ok',id,{lat_ms:Math.round(lat),p_tok:pTok,c_tok:sTok,t_tok:tTok,
+      tps:Math.round(tps*10)/10,stream:false,sent:c.sent,ok:c.ok,active:c.active,
+      rpm_limit:c.serverRpmLimit,max_parallel:c.serverMaxParallel,parallel_remaining:c.serverParallelRemaining,
+      text:text.slice(0,80)});
   }).catch(function(e){
-    if(e.name==='AbortError'){c.sent--;c.active--;rmAC(c,ac);return}
+    if(e.name==='AbortError'){c.sent--;c.active--;return}
     var lat=performance.now()-t0;c.fail++;c.lats.push(lat);
     c.tl.push({t:Date.now(),lat:lat,ok:false,tok:0});
-    var code=e.code||0,cat='net';
+    var m=errMsg(e),code=e.code||0,cat='net';
     if(code>=400&&code<500){c.e4++;cat='4xx'}
     else if(code>=500){c.e5++;cat='5xx'}
-    else if((e.message||'').toLowerCase().indexOf('timeout')!==-1){c.eT++;cat='timeout'}
+    else if(m.toLowerCase().indexOf('timeout')!==-1){c.eT++;cat='timeout'}
     else{c.eN++}
-    c.errs.push({t:Date.now(),msg:(e.message||'Error').slice(0,150),cat:cat});
-    addLog(cfg.model,false,lat,null,0,0,0,0,cfg.priority,cfg.batch,(e.message||'Error').slice(0,120));
+    c.errs.push({t:Date.now(),msg:m.slice(0,5000),cat:cat});
+    addLog(cfg.model,false,lat,null,0,0,0,0,cfg.priority,cfg.batch,m.slice(0,600));
+    elog('req_fail',id,{lat_ms:Math.round(lat),http_code:code,category:cat,error:m.slice(0,500),
+      sent:c.sent,ok:c.ok,fail:c.fail,active:c.active,
+      rpm_limit:c.serverRpmLimit,max_parallel:c.serverMaxParallel,parallel_remaining:c.serverParallelRemaining});
+    if(c.fail<=3||c.fail%25===0)toast(cfg.model+': '+m.slice(0,120),'err');
   }).then(function(){
-    c.active--;rmAC(c,ac);
-    if(cfg.total>0&&c.sent>=cfg.total&&c.active===0){c.run=false;c.tEnd=Date.now();toast(cfg.model+': Fertig','ok')}
+    c.active--;
+    if(cfg.total>0&&c.sent>=cfg.total&&c.active===0){
+      c.run=false;c.tEnd=Date.now();
+      elog('test_done',id,{sent:c.sent,ok:c.ok,fail:c.fail,
+        elapsed_s:c.t0?((c.tEnd-c.t0)/1000):0,
+        serverRpmLimit:c.serverRpmLimit,serverMaxParallel:c.serverMaxParallel});
+      toast(cfg.model+': Fertig','ok');
+    }
   });
 }
-function rmAC(c,ac){var i=c.aborts.indexOf(ac);if(i!==-1)c.aborts.splice(i,1)}
 
 function recordThroughput(c,tok){
   var now=Date.now(),bin=Math.floor(now/5000);
@@ -614,6 +1243,72 @@ function recordThroughput(c,tok){
 function addLog(model,ok,lat,ttfb,pTok,cTok,tTok,tps,priority,batch,text){
   LOG.unshift({time:new Date(),model:model,ok:ok,lat:lat,ttfb:ttfb,pTok:pTok,cTok:cTok,tTok:tTok,tps:tps,priority:priority,batch:batch,text:text});
   if(LOG.length>500)LOG.length=500;
+}
+
+// ════════════════════════════════════════════════
+// STRUCTURED EVENT LOG (for analysis)
+// ════════════════════════════════════════════════
+function elog(event,cardId,data){
+  var c=C[cardId];
+  ELOG.push({
+    seq:++ELOG_SEQ,
+    ts:new Date().toISOString(),
+    t_ms:Date.now(),
+    event:event,
+    card_id:cardId,
+    model:c?c.model:'',
+    key_label:c?c.keyLabel:'',
+    priority:c?c.priority:0,
+    data:data||{}
+  });
+  // keep max 50000 entries
+  if(ELOG.length>50000)ELOG.splice(0,ELOG.length-50000);
+}
+
+function downloadEventLog(){
+  if(ELOG.length===0){toast('Kein Event-Log vorhanden','err');return}
+  // Build summary
+  var summary={generated:new Date().toISOString(),total_events:ELOG.length};
+  var cards=[];
+  for(var id in C){
+    var c=C[id],cfg=getConf(+id),s=calcStats(+id);
+    cards.push({
+      card_id:+id,
+      config:{
+        url:cfg.url,key_label:keyLabel(cfg.key),model:cfg.model,
+        batch:cfg.batch,delay:cfg.delay,total:cfg.total,conc:cfg.conc,
+        maxTok:cfg.maxTok,temp:cfg.temp,priority:cfg.priority,
+        stream:cfg.stream,sslVerify:cfg.sslVerify
+      },
+      results:s?{
+        sent:s.sent,ok:s.ok,fail:s.fail,
+        elapsed_s:Math.round(s.elapsed*10)/10,
+        rps:Math.round(s.rps*100)/100,
+        lat_avg_ms:Math.round(s.avg),lat_p50_ms:Math.round(s.p50),
+        lat_p95_ms:Math.round(s.p95),lat_p99_ms:Math.round(s.p99),
+        lat_min_ms:Math.round(s.min),lat_max_ms:Math.round(s.max),
+        c_tok_per_s:Math.round(s.compTokSec*10)/10,
+        t_tok_per_s:Math.round(s.totalTokSec*10)/10,
+        peak_tps:Math.round(s.peakTps*10)/10,
+        prompt_tok:s.promptTok,comp_tok:s.compTok,total_tok:s.totalTok,
+        ttfb_avg_ms:s.ttfbAvg!==null?Math.round(s.ttfbAvg):null,
+        success_rate:Math.round(s.rate*10)/10,
+        errors:{e4xx:s.e4,e5xx:s.e5,net:s.eN,timeout:s.eT},
+        server_limits:{
+          rpm_limit:c.serverRpmLimit,
+          max_parallel:c.serverMaxParallel,
+          parallel_remaining:c.serverParallelRemaining
+        }
+      }:null
+    });
+  }
+  var out={summary:summary,cards:cards,events:ELOG};
+  var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='event-log-'+new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)+'.json';
+  a.click();
+  toast('Event-Log heruntergeladen ('+ELOG.length+' Events)');
 }
 
 // ════════════════════════════════════════════════
@@ -634,9 +1329,13 @@ function calcStats(id){
   var tpsSorted=c.tpsPerReq.slice().sort(function(a,b){return a-b});
   var ttfbSorted=c.ttfbs.slice().sort(function(a,b){return a-b});
   var rate=(c.ok+c.fail)>0?c.ok/(c.ok+c.fail)*100:0;
+  var dInt=[];
+  for(var i=1;i<c.dispatchTs.length;i++)dInt.push(c.dispatchTs[i]-c.dispatchTs[i-1]);
+  var dSorted=dInt.slice().sort(function(a,b){return a-b});
 
   return{
     model:c.model,run:c.run,color:c.color,
+    keyLabel:c.keyLabel,priority:c.priority,delayCfg:c.delayCfg,serverRpsLimit:c.serverRpsLimit,
     sent:c.sent,ok:c.ok,fail:c.fail,active:c.active,
     avg:avg,min:s[0]||0,max:s[s.length-1]||0,
     p50:pct(s,.5),p95:pct(s,.95),p99:pct(s,.99),stddev:stddev,
@@ -661,10 +1360,13 @@ function calcStats(id){
     ttfbP50:ttfbSorted.length?pct(ttfbSorted,.5):null,
     ttfbP95:ttfbSorted.length?pct(ttfbSorted,.95):null,
     ttfbMin:ttfbSorted[0]||null,ttfbMax:ttfbSorted[ttfbSorted.length-1]||null,
+    dispatchAvg:dInt.length?arrAvg(dInt):null,
+    dispatchP50:dSorted.length?pct(dSorted,.5):null,
+    dispatchMin:dSorted[0]||null,dispatchMax:dSorted[dSorted.length-1]||null,
     // io ratio
     ioRatio:c.promptTok>0?c.compTok/c.promptTok:0,
     // arrays for charts
-    compTokPerReq:c.compTokPerReq,tpsPerReq:c.tpsPerReq,throughputBins:c.throughputBins,
+    compTokPerReq:c.compTokPerReq,tpsPerReq:c.tpsPerReq,throughputBins:c.throughputBins,dispatchTs:c.dispatchTs,
     e4:c.e4,e5:c.e5,eN:c.eN,eT:c.eT,errs:c.errs,lats:c.lats,tl:c.tl
   };
 }
@@ -737,7 +1439,13 @@ function render(){
     if(thrD&&s.sent>0){
       thrD.innerHTML=
         kv('Total Req',s.sent)+kv('OK',s.ok)+kv('Fails',s.fail)+kv('Elapsed',fn(s.elapsed,1)+'s')+
-        kv('Req/s',fn(s.rps,2))+kv('P-Tok/s',fn(s.promptTokSec,1))+kv('C-Tok/s',fn(s.compTokSec,1))+kv('T-Tok/s',fn(s.totalTokSec,1));
+        kv('Req/s',fn(s.rps,2))+kv('P-Tok/s',fn(s.promptTokSec,1))+kv('C-Tok/s',fn(s.compTokSec,1))+kv('T-Tok/s',fn(s.totalTokSec,1))+
+        kv('Header-RPS',s.serverRpsLimit>0?fn(s.serverRpsLimit,1):'–')+
+        kv('RPM Limit',s.serverRpmLimit>0?fn(s.serverRpmLimit,0):'–')+
+        kv('Max Parallel',s.serverMaxParallel>0?fn(s.serverMaxParallel,0):'–')+
+        kv('∥ übrig',s.serverMaxParallel>0?fn(s.serverParallelRemaining,0):'–')+
+        kv('In-Flight',s.active)+
+        kv('Delay Soll',s.delayCfg+'ms')+kv('ΔSend Ø',s.dispatchAvg!==null?fn(s.dispatchAvg,1)+'ms':'–')+kv('ΔSend P50',s.dispatchP50!==null?fn(s.dispatchP50,1)+'ms':'–');
     }
     // Throughput chart (RPS over time in 5s bins)
     var thrC=$$('thrC'+id);
@@ -751,13 +1459,18 @@ function render(){
     // Error tab
     setText('e4'+id,s.e4);setText('e5'+id,s.e5);setText('eN'+id,s.eN);setText('eT'+id,s.eT);
     var eL=$$('eL'+id);
-    if(eL&&s.errs.length>0){
-      var eh='',errs=s.errs.slice(-30);
-      for(var j=errs.length-1;j>=0;j--){
-        var e=errs[j],cls=e.cat==='4xx'?'c4':e.cat==='5xx'?'c5':'cN';
-        var dt=new Date(e.t);
-        eh+='<div class="err-item"><span class="et">'+pad(dt.getHours())+':'+pad(dt.getMinutes())+':'+pad(dt.getSeconds())+'</span><span class="ec '+cls+'">'+e.cat+'</span><span class="em">'+esc(e.msg)+'</span></div>';
-      }eL.innerHTML=eh;
+    if(eL){
+      if(s.errs.length>0){
+        var eh='',errs=s.errs.slice(-120);
+        for(var j=errs.length-1;j>=0;j--){
+          var e=errs[j],cls=e.cat==='4xx'?'c4':e.cat==='5xx'?'c5':'cN';
+          var dt=new Date(e.t);
+          eh+='<div class="err-item"><span class="et">'+pad(dt.getHours())+':'+pad(dt.getMinutes())+':'+pad(dt.getSeconds())+'</span><span class="ec '+cls+'">'+e.cat+'</span><span class="em">'+esc(e.msg)+'</span></div>';
+        }
+        eL.innerHTML=eh;
+      }else{
+        eL.innerHTML='';
+      }
     }
   }
 
@@ -782,6 +1495,19 @@ function render(){
     kpi(fn(errR,1)+'%','Fehlerrate','color:var(--error)')+
     kpi(keys,'Modelle','');
 
+  // Server-Limit KPIs pro Karte
+  var limHtml='';
+  for(var li=0;li<allS.length;li++){
+    var ls=allS[li];
+    if(ls.serverMaxParallel>0||ls.serverRpmLimit>0){
+      limHtml+=kpi(ls.serverRpmLimit>0?fn(ls.serverRpmLimit,0):'–','RPM '+ls.keyLabel,'color:var(--warn)');
+      limHtml+=kpi(ls.serverMaxParallel>0?fn(ls.serverMaxParallel,0):'–','Max∥ '+ls.keyLabel,'color:var(--cyan)');
+      limHtml+=kpi(ls.serverMaxParallel>0?fn(ls.serverParallelRemaining,0):'–','∥ frei '+ls.keyLabel,'color:'+(ls.serverParallelRemaining<5?'var(--error)':'var(--success)'));
+      limHtml+=kpi(ls.active,'In-Flight '+ls.keyLabel,'color:var(--primary)');
+    }
+  }
+  if(limHtml)$$('kpiRow').innerHTML+=limHtml;
+
   $$('dashClock').textContent=gE>0?formatDur(gE):'';
 
   renderHist(gL,$$('histBox'),[
@@ -802,8 +1528,14 @@ function render(){
     {l:'25–50',lo:25,hi:50,c:'var(--success)'},{l:'50–100',lo:50,hi:100,c:'var(--lime)'},
     {l:'100+',lo:100,hi:Infinity,c:'var(--purple)'}]);
 
+  renderLineChart($$('keyLineBox'),buildKeySeries(true),{unit:'',targetField:''});
+  renderLineChart($$('rpsKeyBox'),buildKeySeries(false),{unit:' rps',targetField:''});
+  renderLineChart($$('dispatchLineBox'),buildDispatchSeries(),{unit:' ms',targetField:'target'});
+  renderPriorityCheck(allS);
+
   renderCmp(allS);
   renderLog();
+  ensureInfoIcons();
 }
 
 function renderBars(el,arr,color){
@@ -823,6 +1555,165 @@ function renderHist(vals,el,buckets){
   var h='';for(var i=0;i<buckets.length;i++){
     h+='<div class="hr"><span class="hl">'+buckets[i].l+'</span><div class="hbg"><div class="hf" style="width:'+(counts[i]/mx*100)+'%;background:'+buckets[i].c+'"></div></div><span class="hc">'+counts[i]+'</span></div>';
   }el.innerHTML=h;
+}
+
+function buildKeySeries(cumulative){
+  // globale Zeitbasis: frühester t0 aller Karten
+  var globalT0=Infinity;
+  for(var id in C){
+    var c=C[id];
+    if(c&&c.t0&&c.t0<globalT0) globalT0=c.t0;
+  }
+  if(globalT0===Infinity) globalT0=Date.now();
+
+  var map={},globalMaxSec=0;
+  for(var id in C){
+    var c=C[id];
+    if(!c||!c.t0||!c.tl.length)continue;
+    var name=(c.keyLabel||'kein-key')+' | Prio '+(c.priority||0);
+    if(!map[name])map[name]={name:name,color:c.color,counts:{}};
+    for(var i=0;i<c.tl.length;i++){
+      var ev=c.tl[i];
+      if(!ev.ok)continue;
+      var sec=Math.floor((ev.t-globalT0)/1000);
+      if(sec<0)sec=0;
+      map[name].counts[sec]=(map[name].counts[sec]||0)+1;
+      if(sec>globalMaxSec)globalMaxSec=sec;
+    }
+  }
+  var out=[],mx=Math.max(1,globalMaxSec);
+  for(var k in map){
+    var e=map[k],pts=[],run=0;
+    for(var s=0;s<=mx;s++){
+      var v=e.counts[s]||0;
+      if(cumulative){run+=v;pts.push({x:s,y:run});}
+      else pts.push({x:s,y:v});
+    }
+    e.points=pts;
+    out.push(e);
+  }
+  return out;
+}
+
+function buildDispatchSeries(){
+  var out=[];
+  for(var id in C){
+    var c=C[id];
+    if(!c||!c.dispatchTs||c.dispatchTs.length<2)continue;
+    var start=Math.max(1,c.dispatchTs.length-220),pts=[];
+    for(var i=start;i<c.dispatchTs.length;i++)pts.push({x:i-start+1,y:c.dispatchTs[i]-c.dispatchTs[i-1]});
+    out.push({
+      name:(c.model||'Modell')+' | '+(c.keyLabel||'kein-key')+' | Prio '+(c.priority||0),
+      color:c.color,
+      points:pts,
+      target:c.delayCfg||0
+    });
+  }
+  return out;
+}
+
+function renderLineChart(el,series,opts){
+  if(!el)return;
+  opts=opts||{};
+  if(!series.length){el.innerHTML='<div class="line-card"><div class="line-empty">Keine Daten</div></div>';return}
+  var w=980,h=240,p=28,maxX=1,maxY=1;
+  for(var i=0;i<series.length;i++){
+    var pts=series[i].points||[];
+    for(var j=0;j<pts.length;j++){
+      if(pts[j].x>maxX)maxX=pts[j].x;
+      if(pts[j].y>maxY)maxY=pts[j].y;
+    }
+    if(opts.targetField&&series[i][opts.targetField]>maxY)maxY=series[i][opts.targetField];
+  }
+  maxY=maxY<=0?1:maxY;
+  function mx(v){return p+(v/maxX)*(w-p*2)}
+  function my(v){return(h-p)-((v/maxY)*(h-p*2))}
+  var svg='<svg class="line-svg" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">';
+  for(var g=0;g<=4;g++){
+    var gy=p+((h-p*2)*(g/4));
+    svg+='<line x1="'+p+'" y1="'+gy+'" x2="'+(w-p)+'" y2="'+gy+'" stroke="'+(g===4?'var(--border)':'rgba(148,163,184,.18)')+'" stroke-width="1" />';
+  }
+  svg+='<line x1="'+p+'" y1="'+(h-p)+'" x2="'+(w-p)+'" y2="'+(h-p)+'" stroke="var(--border)" stroke-width="1" />';
+  for(var s=0;s<series.length;s++){
+    var ser=series[s],pts2=ser.points||[];
+    if(opts.targetField&&ser[opts.targetField]>0){
+      var ty=my(ser[opts.targetField]);
+      svg+='<line x1="'+p+'" y1="'+ty+'" x2="'+(w-p)+'" y2="'+ty+'" stroke="'+ser.color+'" stroke-opacity="0.55" stroke-dasharray="5 4" stroke-width="1" />';
+    }
+    if(!pts2.length)continue;
+    var poly='';
+    for(var t=0;t<pts2.length;t++)poly+=mx(pts2[t].x)+','+my(pts2[t].y)+' ';
+    svg+='<polyline fill="none" stroke="'+ser.color+'" stroke-width="2" points="'+poly.trim()+'" />';
+    var lp=pts2[pts2.length-1];
+    svg+='<circle cx="'+mx(lp.x)+'" cy="'+my(lp.y)+'" r="2.5" fill="'+ser.color+'" />';
+  }
+  svg+='</svg>';
+  var leg='<div class="line-legend">';
+  for(var li=0;li<series.length;li++){
+    var lser=series[li],lpts=lser.points||[],last=lpts.length?lpts[lpts.length-1].y:0;
+    var extra=opts.targetField&&lser[opts.targetField]>0?(' · Ziel '+fn(lser[opts.targetField],1)+(opts.unit||'')):'';
+    leg+='<div class="line-item"><span class="line-dot" style="background:'+lser.color+'"></span>'+esc(lser.name)+' · '+fn(last,1)+(opts.unit||'')+extra+'</div>';
+  }
+  leg+='</div>';
+  el.innerHTML='<div class="line-card">'+svg+leg+'</div>';
+}
+
+function renderPriorityCheck(allS){
+  var el=$$('prioCheckBox');
+  if(!el)return;
+  var rows=allS.filter(function(s){return s.sent>0});
+  if(rows.length<2){
+    el.innerHTML='<div class="line-card"><div class="line-empty">Für den Check bitte mindestens 2 Karten mit unterschiedlicher Priorität starten.</div></div>';
+    return;
+  }
+  var minP=Infinity,maxP=-Infinity;
+  for(var i=0;i<rows.length;i++){
+    var p=rows[i].priority||0;
+    if(p<minP)minP=p;
+    if(p>maxP)maxP=p;
+  }
+  if(minP===maxP){
+    el.innerHTML='<div class="line-card"><div class="line-empty">Alle Karten haben die gleiche Priorität ('+minP+'). Für Vergleich zwei unterschiedliche Werte setzen (z. B. 0 und 200).</div></div>';
+    return;
+  }
+  function agg(list){
+    var out={sent:0,ok:0,fail:0,latW:0,elapsed:0,p50:0,p95:0};
+    for(var j=0;j<list.length;j++){
+      var s=list[j],w=Math.max(1,s.ok+s.fail);
+      out.sent+=s.sent;out.ok+=s.ok;out.fail+=s.fail;
+      out.latW+=s.avg*w;
+      if(s.elapsed>out.elapsed)out.elapsed=s.elapsed;
+      out.p50+=s.p50*w;out.p95+=s.p95*w;
+    }
+    var tw=Math.max(1,out.ok+out.fail);
+    out.avg=out.latW/tw;
+    out.p50=out.p50/tw;
+    out.p95=out.p95/tw;
+    out.okps=out.elapsed>0?out.ok/out.elapsed:0;
+    return out;
+  }
+  var high=agg(rows.filter(function(s){return (s.priority||0)===minP;}));
+  var low=agg(rows.filter(function(s){return (s.priority||0)===maxP;}));
+  var latGain=low.avg>0?((low.avg-high.avg)/low.avg*100):0;
+  var p50Gain=low.p50>0?((low.p50-high.p50)/low.p50*100):0;
+  var thrGain=low.okps>0?((high.okps-low.okps)/low.okps*100):0;
+  var okBetter=high.okps>=low.okps;
+  var latBetter=high.avg<=low.avg;
+  var good=okBetter&&latBetter;
+  var color=good?'var(--success)':'var(--warn)';
+  var txt='<div class="line-card">'+
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:8px">Vergleich höchste Priorität (Prio '+minP+') vs niedrigste Priorität (Prio '+maxP+')</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:8px">'+
+      '<div class="kpi"><div class="v" style="color:'+color+'">'+fn(thrGain,1)+'%</div><div class="k">OK/s Vorteil Prio '+minP+'</div></div>'+
+      '<div class="kpi"><div class="v" style="color:'+color+'">'+fn(latGain,1)+'%</div><div class="k">Ø Latenz Reduktion</div></div>'+
+      '<div class="kpi"><div class="v" style="color:'+color+'">'+fn(p50Gain,1)+'%</div><div class="k">P50 Latenz Reduktion</div></div>'+
+    '</div>'+
+    '<div style="font-size:12px;color:var(--text2);margin-top:8px">'+
+      'Prio '+minP+': '+fn(high.okps,2)+' OK/s, Ø '+fms(high.avg)+', P50 '+fms(high.p50)+' · '+
+      'Prio '+maxP+': '+fn(low.okps,2)+' OK/s, Ø '+fms(low.avg)+', P50 '+fms(low.p50)+
+    '</div>'+
+  '</div>';
+  el.innerHTML=txt;
 }
 
 function renderCmp(allS){
@@ -917,6 +1808,7 @@ document.addEventListener('keydown',function(e){
 
 setInterval(render,400);render();
 refreshProfileSelect();
+refreshModelConfigSelect();
 </script>
 </body>
 </html>
