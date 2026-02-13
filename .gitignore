@@ -13,3 +13,6 @@ Thumbs.db
 # Local env files
 .env
 .env.*
+
+# Persistent model config data (Docker volume)
+data/

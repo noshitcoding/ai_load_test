@@ -1,0 +1,2 @@
+-r requirements-load-balancer.txt
+pytest>=9.0
