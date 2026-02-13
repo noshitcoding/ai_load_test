@@ -66,6 +66,14 @@ _REWRITE_RE = re.compile(
     r'^(https?://)(' + '|'.join(re.escape(k) for k in _HOST_REWRITES) + r')(/.*)$',
     re.IGNORECASE,
 )
+_LB_LEGACY_CHAT_RE = re.compile(
+    r'^(https?://(?:load-balancer:8090|localhost:8090|127\.0\.0\.1:8090))/chat/completions(?=$|[/?#])',
+    re.IGNORECASE,
+)
+_LB_LEGACY_MODELS_RE = re.compile(
+    r'^(https?://(?:load-balancer:8090|localhost:8090|127\.0\.0\.1:8090))/models(?=$|[/?#])',
+    re.IGNORECASE,
+)
 
 def rewrite_url(url: str) -> str:
     """Rewrite localhost URLs to Docker-internal service names."""
@@ -74,8 +82,13 @@ def rewrite_url(url: str) -> str:
         new_host = _HOST_REWRITES.get(m.group(2), m.group(2))
         rewritten = m.group(1) + new_host + m.group(3)
         log.info(f"URL rewrite: {url[:60]} → {rewritten[:60]}")
-        return rewritten
-    return url
+        url = rewritten
+
+    fixed = _LB_LEGACY_CHAT_RE.sub(r'\1/v1/chat/completions', url)
+    fixed = _LB_LEGACY_MODELS_RE.sub(r'\1/v1/models', fixed)
+    if fixed != url:
+        log.info(f"Path rewrite: {url[:80]} → {fixed[:80]}")
+    return fixed
 
 
 async def handle_request(ws, msg):

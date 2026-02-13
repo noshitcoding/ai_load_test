@@ -1327,6 +1327,13 @@ def create_app(
         return await proxy_chat(request)
 
     @app.post(
+        "/chat/completions",
+        dependencies=[Depends(require_client)],
+    )
+    async def chat_legacy(request: Request):
+        return await proxy_chat(request)
+
+    @app.post(
         "/v1/{pool_name}/chat/completions",
         dependencies=[Depends(require_client)],
     )
@@ -1337,6 +1344,12 @@ def create_app(
         "/v1/models", dependencies=[Depends(require_client)]
     )
     async def models(request: Request):
+        return await proxy_models(request)
+
+    @app.get(
+        "/models", dependencies=[Depends(require_client)]
+    )
+    async def models_legacy(request: Request):
         return await proxy_models(request)
 
     @app.get(
