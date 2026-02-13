@@ -1,15 +1,15 @@
 # AI Load Test + Externer LLM Load Balancer v2
 
-Dieses Projekt stellt zwei getrennte Komponenten bereit:
+Dieses Projekt stellt zwei getrennte Software-Komponenten bereit:
 
-1. `LLM Load Tester` (Browser-UI, Port `8088`)
+1. `LLM Load Producer` (Browser-UI auf Port `8088` + separater WS-Proxy-Container)
 2. `LLM Load Balancer v2` (Produktiv-API + Visual Admin-UI, Port `8090`)
 
 RabbitMQ/Scheduler/Worker wurden aus dem aktiven Deployment entfernt.
 
 ## Architektur (v2)
 
-- Der Load Tester schickt Requests an eine frei konfigurierbare `API Base URL`.
+- Der Load Producer schickt Requests an eine frei konfigurierbare `API Base URL`.
 - Der Load Balancer v2 bietet OpenAI-kompatible Endpunkte und verteilt Last auf mehrere vLLM/OpenAI-Backends (**Endpoints**).
 - Das alte Pool/Target-Modell wurde durch ein flaches **Endpoint-Modell** ersetzt: Jeder Endpoint ist ein direktes Backend mit `base_url`, `api_key`, `name`, Routing-Parametern und Statistiken.
 - Das Admin-UI ist ein **Visual Flow Editor** (n8n-Style) mit draggable Nodes und SVG-Bezier-Wires. Endpoints muessen per Wire mit dem "Incoming"-Node verbunden sein, um Traffic zu erhalten.
@@ -18,7 +18,7 @@ RabbitMQ/Scheduler/Worker wurden aus dem aktiven Deployment entfernt.
   - **Priority (Prioritaet)**: Primaer-Endpoint erhaelt immer Traffic. Overflow-Endpoints uebernehmen Restkapazitaet. Gesteuert via `priority_order` und `max_concurrent`.
 - **Token Throughput Tracking**: Jede Antwort wird auf den `usage`-Block geparst. Pro Endpoint und global werden `prompt_tokens` / `completion_tokens` erfasst. Dashboard zeigt tok/s und req/s.
 - **Batch-aware fuer vLLM**: Da vLLM intern Batching uebernimmt, verteilt der LB Einzel-Requests. Token-Durchsatz ist die primaere Metrik, nicht Request-Anzahl.
-- Konfiguration und Runtime-Metriken werden persistent in SQLite gespeichert (`data/load_balancer.db`).
+- Konfiguration und Runtime-Metriken werden persistent in SQLite gespeichert (`data/load-balancer/load_balancer.db` auf dem Host).
 
 ## Endpunkte
 
@@ -54,7 +54,7 @@ docker compose up -d --build
 
 Danach:
 
-- Load Tester: `http://localhost:8088`
+- Load Producer: `http://localhost:8088`
 - Load Balancer Admin (Visual Flow Editor): `http://localhost:8090/admin`
 - Load Balancer Health: `http://localhost:8090/health`
 
@@ -64,11 +64,11 @@ Stoppen:
 docker compose down
 ```
 
-## Balancer im Load Tester verwenden
+## Balancer im Load Producer verwenden
 
 1. Im Balancer-Admin (`/admin`) mindestens einen Endpoint anlegen und per Wire mit dem Incoming-Node verbinden.
 2. Routing-Modus waehlen (Percentage oder Priority).
-3. Im Load Tester pro Karte setzen:
+3. Im Load Producer pro Karte setzen:
    - `API Base URL`: `http://localhost:8090/v1`
    - `API Key`: Client-Token aus `LB_CLIENT_TOKENS` (Bearer-Token)
 
@@ -97,8 +97,8 @@ Entfernt in v2: `LB_DEFAULT_POOL` (nicht mehr relevant, da kein Pool-Modell).
 
 ## Persistenz
 
-- Balancer-Konfiguration + Statistiken: `data/load_balancer.db`
-- Load-Tester Modell-Konfigurationen: weiterhin ueber `data/` (WebDAV) + LocalStorage Fallback.
+- Balancer-Konfiguration + Statistiken: `data/load-balancer/load_balancer.db`
+- Load-Producer Modell-Konfigurationen: `data/load-producer/` (WebDAV) + LocalStorage Fallback.
 
 ## Security-Hinweise
 
@@ -111,8 +111,8 @@ Entfernt in v2: `LB_DEFAULT_POOL` (nicht mehr relevant, da kein Pool-Modell).
 
 - Compose enthaelt Healthchecks fuer:
   - `load-balancer` (`/health`)
-  - `ws-proxy` (TCP-Port-Check)
-  - `load-tester` (`/` via Nginx)
+  - `load-producer-proxy` (TCP-Port-Check)
+  - `load-producer` (`/` via Nginx)
 - `/health` liefert zusaetzlich: `endpoints`, `connected`, `routing_mode`, `tokens_per_second`, `requests_per_second`, `total_inflight`.
 
 ## Tests

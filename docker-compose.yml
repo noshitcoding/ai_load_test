@@ -1,17 +1,19 @@
 services:
-  load-tester:
-    image: nginx:alpine
-    container_name: llm-load-tester
+  load-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.load-producer
+    container_name: llm-load-producer
     ports:
       - "8088:80"
     volumes:
-      - ./index.html:/usr/share/nginx/html/index.html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./data:/usr/share/nginx/html/data
+      - ./data/load-producer:/usr/share/nginx/html/data
     depends_on:
-      ws-proxy:
+      load-producer-proxy:
         condition: service_healthy
         required: true
+    networks:
+      - producer_net
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
       interval: 30s
@@ -20,15 +22,18 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  ws-proxy:
+  load-producer-proxy:
     build:
       context: .
       dockerfile: Dockerfile.ws-proxy
-    container_name: llm-ws-proxy
-    volumes:
-      - ./ws_proxy.py:/app/ws_proxy.py:ro
+    container_name: llm-load-producer-proxy
+    environment:
+      WS_HOST_REWRITES: "localhost:8090=load-balancer:8090,127.0.0.1:8090=load-balancer:8090"
     expose:
       - "8765"
+    networks:
+      - producer_net
+      - balancer_net
     healthcheck:
       test: ["CMD", "python", "-c", "import socket,sys;s=socket.socket();s.settimeout(2);s.connect(('127.0.0.1',8765));s.close();sys.exit(0)"]
       interval: 30s
@@ -45,9 +50,9 @@ services:
     ports:
       - "8090:8090"
     volumes:
-      - ./load_balancer.py:/app/load_balancer.py:ro
-      - ./load_balancer_admin.html:/app/load_balancer_admin.html:ro
-      - ./data:/data
+      - ./data/load-balancer:/data
+    networks:
+      - balancer_net
     environment:
       LB_PORT: "8090"
       LB_DB_PATH: "/data/load_balancer.db"
@@ -66,3 +71,9 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+networks:
+  producer_net:
+    name: llm_producer_net
+  balancer_net:
+    name: llm_balancer_net

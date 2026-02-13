@@ -122,7 +122,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="sidebar" id="sidebar">
     <div class="sb-section" id="sbInfo">
       <h3>Info</h3>
-      <p style="font-size:12px;color:var(--muted)">Klicke auf einen Endpoint-Knoten, um dessen Details zu sehen. Ziehe vom <b>Ausgang</b> des Incoming-Knotens zu einem <b>Eingang</b> eines Endpoints, um eine Verbindung herzustellen.</p>
+      <p style="font-size:12px;color:var(--muted)">Klicke auf einen Endpoint-Knoten, um dessen Details zu sehen. Ziehe vom <b>Ausgang</b> eines Incoming-Knotens zu einem <b>Eingang</b> eines Endpoints, um eine Verbindung herzustellen.</p>
     </div>
 
     <div class="sb-section" id="sbDetail" style="display:none">
@@ -151,6 +151,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     </div>
 
     <div class="sb-section">
+      <h3>Incoming-Blöcke</h3>
+      <div id="incomingBlockList"></div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+        <div class="sb-row"><div class="sb-field"><label>Block-Name</label><input id="newIncomingName" placeholder="z.B. Setup A"/></div></div>
+        <div class="sb-row" style="margin-top:4px"><button class="sb-btn primary" onclick="createIncomingBlock()">Incoming-Block erstellen</button></div>
+      </div>
+    </div>
+
+    <div class="sb-section">
       <h3>Client-Zugang</h3>
       <p style="font-size:11px;color:var(--muted);word-break:break-all">
         Base-URL: <span style="color:var(--text)" id="clientUrl">—</span>
@@ -159,6 +168,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
         <div class="sb-row"><div class="sb-field"><label>Token-Name</label><input id="newTokenName" placeholder="z.B. load-tester-1"/></div></div>
         <div class="sb-row"><div class="sb-field"><label>Token (leer=auto)</label><input id="newTokenValue" placeholder="auto-generiert"/></div></div>
+        <div class="sb-row"><div class="sb-field"><label>Incoming-Block</label><select id="newTokenIncoming"></select></div></div>
         <div class="sb-row" style="margin-top:4px"><button class="sb-btn primary" onclick="createClientToken()">Token erstellen</button></div>
       </div>
     </div>
@@ -183,6 +193,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 const S = {state: null, selected: null, fullTokens: []};
 let isDragging = false;
 let wireDrawing = null;
+let lastFormEditAt = 0;
 
 /* ─── helpers ────── */
 const $ = id => document.getElementById(id);
@@ -195,6 +206,14 @@ function adminHeaders(extra){
   const h = Object.assign({'Content-Type':'application/json'}, extra||{});
   h['X-Admin-Token'] = getToken();
   return h;
+}
+
+function getIncomingBlocks(){
+  if(S.state?.incoming_blocks?.length) return S.state.incoming_blocks;
+  if(S.state?.incoming_pos){
+    return [{id:1,name:'Incoming 1',pos_x:S.state.incoming_pos.x||256,pos_y:S.state.incoming_pos.y||300}];
+  }
+  return [{id:1,name:'Incoming 1',pos_x:256,pos_y:300}];
 }
 
 async function api(path, opts){
@@ -216,6 +235,7 @@ const wireSvg  = $('wireSvg');
 function renderAll(skipDetail){
   if(!S.state) return;
   const st = S.state;
+  const incomingBlocks = getIncomingBlocks();
   $('routingMode').value = st.routing_mode;
   renderPriorityInputControl(st);
   canvasEl.querySelectorAll('.node').forEach(n=>n.remove());
@@ -232,13 +252,17 @@ function renderAll(skipDetail){
     canvasEl.appendChild(n);
   });
 
-  // ── Incoming node (center) ──
-  const inc = mkNode('incoming', {
-    x: st.incoming_pos.x, y: st.incoming_pos.y,
-    title: '⚡ Incoming',
-    stats: st.stats
+  // ── Incoming nodes (center) ──
+  incomingBlocks.forEach((ib, idx) => {
+    const inc = mkNode('incoming', {
+      block: ib,
+      x: ib.pos_x,
+      y: ib.pos_y,
+      stats: st.stats,
+      index: idx,
+    });
+    canvasEl.appendChild(inc);
   });
-  canvasEl.appendChild(inc);
 
   // ── Endpoint nodes (right) ──
   const totalTok = st.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
@@ -285,8 +309,10 @@ function mkNode(type, cfg){
 
   if(type==='incoming'){
     el.dataset.type = 'incoming';
+    el.dataset.id = cfg.block?.id || '';
+    const title = cfg.block?.name || 'Incoming';
     el.innerHTML = `
-      <div class="head"><span class="icon">⚡</span> Incoming</div>
+      <div class="head"><span class="icon">⚡</span> ${esc(title)}</div>
       <div class="body">
         <div class="row"><span>In-Flight</span><span class="val">${cfg.stats.total_inflight}</span></div>
         <div class="row"><span>Req/s</span><span class="val">${cfg.stats.requests_per_second}</span></div>
@@ -344,23 +370,29 @@ function mkNode(type, cfg){
 function renderWires(){
   wireSvg.innerHTML = '';
   if(!S.state) return;
-  const incEl = canvasEl.querySelector('.node.incoming');
-  if(!incEl) return;
+  const incomingEls = Array.from(canvasEl.querySelectorAll('.node.incoming'));
+  if(incomingEls.length===0) return;
+  const incomingById = new Map();
+  incomingEls.forEach(el=>{
+    const bid = parseInt(el.dataset.id||'0',10);
+    if(bid>0) incomingById.set(bid, el);
+  });
+  const defaultIncomingEl = incomingEls[0];
   const cr = canvasEl.getBoundingClientRect();
 
   // ── Wires: Client Tokens → Incoming ──
-  const incInputX = incEl.offsetLeft;
-  const incInputY = incEl.offsetTop + incEl.offsetHeight / 2;
   (S.state.client_tokens||[]).forEach(ct => {
     const ctEl = canvasEl.querySelector(`.node.client-token[data-id="${ct.id}"]`);
     if(!ctEl) return;
     const outPort = ctEl.querySelector('.port.output');
     if(!outPort) return;
+    const targetIncoming = incomingById.get(parseInt(ct.incoming_block_id||'0',10)) || defaultIncomingEl;
+    if(!targetIncoming) return;
     const oR = outPort.getBoundingClientRect();
     const x1 = oR.left - cr.left + oR.width/2;
     const y1 = oR.top - cr.top + oR.height/2;
-    const x2 = incInputX;
-    const y2 = incInputY;
+    const x2 = targetIncoming.offsetLeft;
+    const y2 = targetIncoming.offsetTop + targetIncoming.offsetHeight / 2;
     const path = document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d', bezier(x1,y1,x2,y2));
     path.setAttribute('class', 'wire active');
@@ -369,35 +401,37 @@ function renderWires(){
   });
 
   // ── Wires: Incoming → Endpoints ──
-  const outPort = incEl.querySelector('.port.output');
-  if(!outPort) return;
+  incomingEls.forEach(incEl => {
+    const outPort = incEl.querySelector('.port.output');
+    if(!outPort) return;
 
-  S.state.endpoints.filter(e=>e.connected).forEach(ep=>{
-    const epEl = canvasEl.querySelector(`.node[data-id="${ep.id}"][data-type="endpoint"]`);
-    if(!epEl) return;
-    const inPort = epEl.querySelector('.port.input');
-    if(!inPort) return;
-    const or2 = outPort.getBoundingClientRect();
-    const ir = inPort.getBoundingClientRect();
-    const x1 = or2.left - cr.left + or2.width/2;
-    const y1 = or2.top  - cr.top  + or2.height/2;
-    const x2 = ir.left - cr.left + ir.width/2;
-    const y2 = ir.top  - cr.top  + ir.height/2;
+    S.state.endpoints.filter(e=>e.connected).forEach(ep=>{
+      const epEl = canvasEl.querySelector(`.node[data-id="${ep.id}"][data-type="endpoint"]`);
+      if(!epEl) return;
+      const inPort = epEl.querySelector('.port.input');
+      if(!inPort) return;
+      const or2 = outPort.getBoundingClientRect();
+      const ir = inPort.getBoundingClientRect();
+      const x1 = or2.left - cr.left + or2.width/2;
+      const y1 = or2.top  - cr.top  + or2.height/2;
+      const x2 = ir.left - cr.left + ir.width/2;
+      const y2 = ir.top  - cr.top  + ir.height/2;
 
-    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d', bezier(x1,y1,x2,y2));
-    path.setAttribute('class', 'wire'+(ep.inflight>0?' active':''));
-    wireSvg.appendChild(path);
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', bezier(x1,y1,x2,y2));
+      path.setAttribute('class', 'wire'+(ep.inflight>0?' active':''));
+      wireSvg.appendChild(path);
 
-    const mx = (x1+x2)/2, my = (y1+y2)/2 - 8;
-    const totalTok = S.state.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
-    const pct = totalTok > 0 ? (ep.completion_tokens_total/totalTok*100).toFixed(0)+'%' : '—';
-    const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
-    lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
-    lbl.setAttribute('class','wire-label');
-    lbl.setAttribute('text-anchor','middle');
-    lbl.textContent = pct;
-    wireSvg.appendChild(lbl);
+      const mx = (x1+x2)/2, my = (y1+y2)/2 - 8;
+      const totalTok = S.state.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
+      const pct = totalTok > 0 ? (ep.completion_tokens_total/totalTok*100).toFixed(0)+'%' : '—';
+      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
+      lbl.setAttribute('class','wire-label');
+      lbl.setAttribute('text-anchor','middle');
+      lbl.textContent = pct;
+      wireSvg.appendChild(lbl);
+    });
   });
 }
 
@@ -407,8 +441,9 @@ function bezier(x1,y1,x2,y2){
 }
 
 /* ─── Footer ── */
-function renderFooter(){
+function renderLiveStats(){
   const st = S.state;
+  if(!st) return;
   $('fTps').textContent  = st.stats.tokens_per_second;
   $('fRps').textContent  = st.stats.requests_per_second;
   $('fInf').textContent  = st.stats.total_inflight;
@@ -416,6 +451,11 @@ function renderFooter(){
   $('fConn').textContent = st.endpoints.filter(e=>e.connected).length;
   $('fMode').textContent = st.routing_mode === 'priority' ? 'Priorität' : 'Prozentual';
   $('clientUrl').textContent = location.origin + '/v1';
+}
+
+function renderFooter(){
+  renderLiveStats();
+  renderIncomingBlockList();
   renderTokenList();
 }
 
@@ -525,7 +565,11 @@ document.addEventListener('mouseup', e=>{
       const x = dragState.el.offsetLeft;
       const y = dragState.el.offsetTop;
       if(dragState.type==='incoming'){
-        api('/admin/api/incoming-pos',{method:'PATCH',body:JSON.stringify({x,y})}).catch(()=>{});
+        if(dragState.id){
+          api(`/admin/api/incoming-blocks/${dragState.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+        } else {
+          api('/admin/api/incoming-pos',{method:'PATCH',body:JSON.stringify({x,y})}).catch(()=>{});
+        }
       } else if(dragState.type==='client-token' && dragState.id){
         api(`/admin/api/tokens/${dragState.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
       } else if(dragState.id){
@@ -579,6 +623,14 @@ function isEditingForm(){
   return (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
 }
 
+function markFormEdited(){
+  lastFormEditAt = Date.now();
+}
+
+function hasRecentFormEdit(){
+  return (Date.now() - lastFormEditAt) < 4000;
+}
+
 async function loadState(auto){
   if(isDragging) return;
   try{
@@ -586,10 +638,10 @@ async function loadState(auto){
     // Load full tokens for display
     try{ S.fullTokens = await api('/admin/api/tokens'); }catch(e){ S.fullTokens = []; }
     setStatus('Verbunden', true);
-    if(auto && isEditingForm()){
+    if(auto && (isEditingForm() || hasRecentFormEdit())){
       // User is editing a form field – only update footer stats, don't
       // destroy/recreate canvas nodes or overwrite sidebar inputs
-      renderFooter();
+      renderLiveStats();
     } else {
       renderAll(auto && S.selected);
     }
@@ -790,6 +842,11 @@ async function deleteClientToken(tid){
 /* ═══════════════════════════════════════════════════════════════════════════ */
 (function init(){
   $('adminToken').value = getToken();
+  const sidebar = $('sidebar');
+  if(sidebar){
+    sidebar.addEventListener('input', markFormEdited);
+    sidebar.addEventListener('change', markFormEdited);
+  }
   loadState();
   setInterval(()=>loadState(true), 3000);
 })();

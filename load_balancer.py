@@ -223,10 +223,20 @@ class SQLiteStore:
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
                     name       TEXT    NOT NULL,
                     token      TEXT    NOT NULL UNIQUE,
+                    incoming_block_id INTEGER,
                     preferred_endpoint_id INTEGER,
                     request_priority INTEGER NOT NULL DEFAULT 0,
                     min_traffic_percent REAL NOT NULL DEFAULT 0,
                     created_at TEXT    NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS incoming_blocks (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name       TEXT    NOT NULL,
+                    pos_x      REAL    NOT NULL DEFAULT 256,
+                    pos_y      REAL    NOT NULL DEFAULT 300,
+                    created_at TEXT    NOT NULL,
+                    updated_at TEXT    NOT NULL
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_ep_conn
@@ -241,6 +251,7 @@ class SQLiteStore:
                 "total_requests INTEGER NOT NULL DEFAULT 0",
                 "prompt_tokens_total INTEGER NOT NULL DEFAULT 0",
                 "completion_tokens_total INTEGER NOT NULL DEFAULT 0",
+                "incoming_block_id INTEGER",
                 "preferred_endpoint_id INTEGER",
                 "request_priority INTEGER NOT NULL DEFAULT 0",
                 "min_traffic_percent REAL NOT NULL DEFAULT 0",
@@ -251,6 +262,36 @@ class SQLiteStore:
                     )
                 except sqlite3.OperationalError:
                     pass
+
+            block_count_row = self._conn.execute(
+                "SELECT COUNT(*) AS c FROM incoming_blocks"
+            ).fetchone()
+            block_count = int(block_count_row["c"]) if block_count_row else 0
+            if block_count == 0:
+                ix_row = self._conn.execute(
+                    "SELECT value FROM settings WHERE key='incoming_pos_x'"
+                ).fetchone()
+                iy_row = self._conn.execute(
+                    "SELECT value FROM settings WHERE key='incoming_pos_y'"
+                ).fetchone()
+                ix = float(ix_row["value"]) if ix_row else 256.0
+                iy = float(iy_row["value"]) if iy_row else 300.0
+                now = now_iso()
+                self._conn.execute(
+                    "INSERT INTO incoming_blocks(name,pos_x,pos_y,created_at,updated_at) "
+                    "VALUES(?,?,?,?,?)",
+                    ("Incoming 1", ix, iy, now, now),
+                )
+
+            default_block = self._conn.execute(
+                "SELECT id FROM incoming_blocks ORDER BY id LIMIT 1"
+            ).fetchone()
+            if default_block:
+                self._conn.execute(
+                    "UPDATE client_tokens SET incoming_block_id=? "
+                    "WHERE incoming_block_id IS NULL",
+                    (int(default_block["id"]),),
+                )
             self._conn.commit()
 
     def close(self) -> None:
@@ -409,6 +450,84 @@ class SQLiteStore:
             ).fetchall()
         return [self._row(r) for r in rows]
 
+    # ── incoming blocks CRUD ─────────────────────────────────────────────
+
+    def list_incoming_blocks(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM incoming_blocks ORDER BY id"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_incoming_block(self, bid: int) -> Optional[dict[str, Any]]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM incoming_blocks WHERE id=?", (bid,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def create_incoming_block(
+        self, name: str, pos_x: float, pos_y: float
+    ) -> dict[str, Any]:
+        now = now_iso()
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO incoming_blocks(name,pos_x,pos_y,created_at,updated_at) "
+                "VALUES(?,?,?,?,?)",
+                (name, float(pos_x), float(pos_y), now, now),
+            )
+            self._conn.commit()
+            row = self._conn.execute(
+                "SELECT * FROM incoming_blocks WHERE id=?", (cur.lastrowid,)
+            ).fetchone()
+        return dict(row)
+
+    def update_incoming_block(
+        self, bid: int, u: dict[str, Any]
+    ) -> Optional[dict[str, Any]]:
+        allowed = {"name", "pos_x", "pos_y"}
+        parts: list[str] = []
+        vals: list[Any] = []
+        for k, v in u.items():
+            if k not in allowed:
+                continue
+            parts.append(f"{k}=?")
+            vals.append(v)
+        if not parts:
+            return self.get_incoming_block(bid)
+        vals += [now_iso(), bid]
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE incoming_blocks SET {','.join(parts)}, updated_at=? WHERE id=?",
+                vals,
+            )
+            self._conn.commit()
+            row = self._conn.execute(
+                "SELECT * FROM incoming_blocks WHERE id=?", (bid,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def delete_incoming_block(self, bid: int) -> bool:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id FROM incoming_blocks ORDER BY id"
+            ).fetchall()
+            ids = [int(r["id"]) for r in rows]
+            if bid not in ids:
+                return False
+            if len(ids) <= 1:
+                raise ValueError("cannot delete last incoming block")
+            fallback_id = next(i for i in ids if i != bid)
+            self._conn.execute(
+                "UPDATE client_tokens SET incoming_block_id=? WHERE incoming_block_id=?",
+                (fallback_id, bid),
+            )
+            cur = self._conn.execute(
+                "DELETE FROM incoming_blocks WHERE id=?", (bid,)
+            )
+            self._conn.commit()
+        return cur.rowcount > 0
+
     def record_result(
         self,
         eid: int,
@@ -463,6 +582,7 @@ class SQLiteStore:
         self,
         name: str,
         token: Optional[str] = None,
+        incoming_block_id: Optional[int] = None,
         preferred_endpoint_id: Optional[int] = None,
         request_priority: int = 0,
         min_traffic_percent: float = 0,
@@ -470,13 +590,20 @@ class SQLiteStore:
         tok = (token or "").strip() or ("ct-" + secrets.token_urlsafe(32))
         now = now_iso()
         with self._lock:
+            ibid = incoming_block_id
+            if ibid is None:
+                default_block = self._conn.execute(
+                    "SELECT id FROM incoming_blocks ORDER BY id LIMIT 1"
+                ).fetchone()
+                ibid = int(default_block["id"]) if default_block else None
             cur = self._conn.execute(
                 "INSERT INTO client_tokens("
-                "name, token, preferred_endpoint_id, request_priority, min_traffic_percent, created_at"
-                ") VALUES(?,?,?,?,?,?)",
+                "name, token, incoming_block_id, preferred_endpoint_id, request_priority, min_traffic_percent, created_at"
+                ") VALUES(?,?,?,?,?,?,?)",
                 (
                     name,
                     tok,
+                    ibid,
                     preferred_endpoint_id,
                     int(request_priority),
                     float(min_traffic_percent),
@@ -527,6 +654,7 @@ class SQLiteStore:
             "name",
             "pos_x",
             "pos_y",
+            "incoming_block_id",
             "preferred_endpoint_id",
             "request_priority",
             "min_traffic_percent",
@@ -640,6 +768,7 @@ class ClientTokenCreate(BaseModel):
     token: Optional[str] = Field(default=None, max_length=500)
     pos_x: float = Field(default=80)
     pos_y: float = Field(default=100)
+    incoming_block_id: Optional[int] = Field(default=None, ge=1)
     preferred_endpoint_id: Optional[int] = Field(default=None, ge=1)
     request_priority: int = Field(default=0, ge=0, le=1000)
     min_traffic_percent: float = Field(default=0, ge=0, le=100)
@@ -649,9 +778,22 @@ class ClientTokenPatch(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     pos_x: Optional[float] = None
     pos_y: Optional[float] = None
+    incoming_block_id: Optional[int] = Field(default=None, ge=1)
     preferred_endpoint_id: Optional[int] = Field(default=None, ge=1)
     request_priority: Optional[int] = Field(default=None, ge=0, le=1000)
     min_traffic_percent: Optional[float] = Field(default=None, ge=0, le=100)
+
+
+class IncomingBlockCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    pos_x: float = Field(default=256)
+    pos_y: float = Field(default=300)
+
+
+class IncomingBlockPatch(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    pos_x: Optional[float] = None
+    pos_y: Optional[float] = None
 
 
 # ── Routing Engine ────────────────────────────────────────────────────────────
@@ -797,8 +939,20 @@ class LoadBalancerEngine:
         eps: list[dict[str, Any]],
         prefer_non_primary: bool = False,
     ) -> dict[str, Any]:
+        def _priority_sort_key(e: dict[str, Any]) -> tuple[int, int, int, float, int]:
+            req_count = int(e.get("total_requests", 0) or 0)
+            avg_latency = float(e.get("avg_latency_ms", 0.0) or 0.0)
+            latency_rank = avg_latency if req_count > 0 else 0.0
+            return (
+                int(e.get("priority_order", 10) or 10),
+                int(e.get("consecutive_failures", 0) or 0),
+                int(e.get("total_failures", 0) or 0),
+                latency_rank,
+                int(e.get("id", 0) or 0),
+            )
+
         ordered = sorted(
-            eps, key=lambda e: int(e.get("priority_order", 10))
+            eps, key=_priority_sort_key
         )
         if prefer_non_primary and len(ordered) > 1:
             ordered = ordered[1:] + ordered[:1]
@@ -1384,8 +1538,27 @@ def create_app(
                 0.0, float(e.get("cooldown_until", 0)) - time.time()
             )
             safe.append(sanitize_endpoint(enriched))
-        ix = float(store.get_setting("incoming_pos_x") or 80)
-        iy = float(store.get_setting("incoming_pos_y") or 300)
+        incoming_blocks = await asyncio.to_thread(
+            store.list_incoming_blocks
+        )
+        if not incoming_blocks:
+            created = await asyncio.to_thread(
+                store.create_incoming_block,
+                "Incoming 1",
+                256.0,
+                300.0,
+            )
+            incoming_blocks = [created]
+        incoming_safe = [
+            {
+                "id": int(b["id"]),
+                "name": str(b["name"]),
+                "pos_x": float(b.get("pos_x", 256)),
+                "pos_y": float(b.get("pos_y", 300)),
+            }
+            for b in incoming_blocks
+        ]
+        legacy_incoming = incoming_safe[0]
         # client tokens with stats
         tokens_raw = await asyncio.to_thread(store.list_client_tokens)
         cstats = engine.client_stats()
@@ -1393,10 +1566,15 @@ def create_app(
         endpoint_name_by_id = {
             int(e["id"]): str(e["name"]) for e in eps
         }
+        incoming_ids = {int(b["id"]) for b in incoming_blocks}
+        default_incoming_id = int(incoming_blocks[0]["id"])
         for t in tokens_raw:
             tid = t["id"]
             cs = cstats.get(tid, {})
             preferred_eid = t.get("preferred_endpoint_id")
+            ibid = t.get("incoming_block_id")
+            if ibid is None or int(ibid) not in incoming_ids:
+                ibid = default_incoming_id
             tokens_safe.append({
                 "id": tid,
                 "name": t["name"],
@@ -1404,6 +1582,7 @@ def create_app(
                 "created_at": t["created_at"],
                 "pos_x": t.get("pos_x", 80),
                 "pos_y": t.get("pos_y", 100),
+                "incoming_block_id": int(ibid),
                 "total_requests": t.get("total_requests", 0),
                 "prompt_tokens_total": t.get("prompt_tokens_total", 0),
                 "completion_tokens_total": t.get("completion_tokens_total", 0),
@@ -1422,7 +1601,11 @@ def create_app(
                 "routing_mode": engine.routing_mode,
                 "priority_input_token_id": get_priority_input_token_id(),
                 "endpoints": safe,
-                "incoming_pos": {"x": ix, "y": iy},
+                "incoming_blocks": incoming_safe,
+                "incoming_pos": {
+                    "x": legacy_incoming["pos_x"],
+                    "y": legacy_incoming["pos_y"],
+                },
                 "stats": st,
                 "client_tokens": tokens_safe,
             }
@@ -1527,9 +1710,19 @@ def create_app(
     )
     async def list_tokens():
         tokens = await asyncio.to_thread(store.list_client_tokens)
+        incoming_blocks = await asyncio.to_thread(
+            store.list_incoming_blocks
+        )
+        incoming_ids = {int(b["id"]) for b in incoming_blocks}
+        default_incoming_id = (
+            int(incoming_blocks[0]["id"]) if incoming_blocks else 1
+        )
         safe = []
         for t in tokens:
             preferred_eid = t.get("preferred_endpoint_id")
+            ibid = t.get("incoming_block_id")
+            if ibid is None or int(ibid) not in incoming_ids:
+                ibid = default_incoming_id
             safe.append({
                 "id": t["id"],
                 "name": t["name"],
@@ -1538,6 +1731,7 @@ def create_app(
                 "created_at": t["created_at"],
                 "pos_x": t.get("pos_x", 80),
                 "pos_y": t.get("pos_y", 100),
+                "incoming_block_id": int(ibid),
                 "total_requests": t.get("total_requests", 0),
                 "prompt_tokens_total": t.get("prompt_tokens_total", 0),
                 "completion_tokens_total": t.get("completion_tokens_total", 0),
@@ -1552,6 +1746,12 @@ def create_app(
         dependencies=[Depends(require_admin)],
     )
     async def create_token(payload: ClientTokenCreate):
+        if payload.incoming_block_id is not None:
+            ib = await asyncio.to_thread(
+                store.get_incoming_block, payload.incoming_block_id
+            )
+            if not ib:
+                raise HTTPException(404, "incoming block not found")
         if payload.preferred_endpoint_id is not None:
             ep = await asyncio.to_thread(
                 store.get_endpoint, payload.preferred_endpoint_id
@@ -1563,6 +1763,7 @@ def create_app(
                 store.create_client_token,
                 payload.name,
                 payload.token,
+                payload.incoming_block_id,
                 payload.preferred_endpoint_id,
                 payload.request_priority,
                 payload.min_traffic_percent,
@@ -1588,6 +1789,12 @@ def create_app(
         u = payload.model_dump(exclude_none=True)
         if not u:
             raise HTTPException(400, "nothing to update")
+        if u.get("incoming_block_id") is not None:
+            ib = await asyncio.to_thread(
+                store.get_incoming_block, int(u["incoming_block_id"])
+            )
+            if not ib:
+                raise HTTPException(404, "incoming block not found")
         if u.get("preferred_endpoint_id") is not None:
             ep = await asyncio.to_thread(
                 store.get_endpoint, int(u["preferred_endpoint_id"])
@@ -1610,21 +1817,93 @@ def create_app(
             raise HTTPException(404, "token not found")
         return JSONResponse({"ok": True})
 
+    @app.get(
+        "/admin/api/incoming-blocks",
+        dependencies=[Depends(require_admin)],
+    )
+    async def list_incoming_blocks():
+        blocks = await asyncio.to_thread(store.list_incoming_blocks)
+        return JSONResponse(blocks)
+
+    @app.post(
+        "/admin/api/incoming-blocks",
+        dependencies=[Depends(require_admin)],
+    )
+    async def create_incoming_block(payload: IncomingBlockCreate):
+        block = await asyncio.to_thread(
+            store.create_incoming_block,
+            payload.name.strip(),
+            payload.pos_x,
+            payload.pos_y,
+        )
+        return JSONResponse(block)
+
+    @app.patch(
+        "/admin/api/incoming-blocks/{bid}",
+        dependencies=[Depends(require_admin)],
+    )
+    async def patch_incoming_block(
+        bid: int, payload: IncomingBlockPatch
+    ):
+        updates = payload.model_dump(exclude_none=True)
+        if "name" in updates:
+            updates["name"] = str(updates["name"]).strip()
+        if not updates:
+            raise HTTPException(400, "nothing to update")
+        block = await asyncio.to_thread(
+            store.update_incoming_block, bid, updates
+        )
+        if not block:
+            raise HTTPException(404, "incoming block not found")
+        return JSONResponse(block)
+
+    @app.delete(
+        "/admin/api/incoming-blocks/{bid}",
+        dependencies=[Depends(require_admin)],
+    )
+    async def delete_incoming_block(bid: int):
+        try:
+            ok = await asyncio.to_thread(store.delete_incoming_block, bid)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+        if not ok:
+            raise HTTPException(404, "incoming block not found")
+        return JSONResponse({"ok": True})
+
     @app.patch(
         "/admin/api/incoming-pos",
         dependencies=[Depends(require_admin)],
     )
     async def patch_incoming_pos(request: Request):
         body = await request.json()
+        blocks = await asyncio.to_thread(store.list_incoming_blocks)
+        if not blocks:
+            created = await asyncio.to_thread(
+                store.create_incoming_block,
+                "Incoming 1",
+                256.0,
+                300.0,
+            )
+            blocks = [created]
+        first_id = int(blocks[0]["id"])
+        updates: dict[str, Any] = {}
         if "x" in body:
+            x = float(body["x"])
+            updates["pos_x"] = x
             await asyncio.to_thread(
-                store.set_setting, "incoming_pos_x", str(float(body["x"]))
+                store.set_setting, "incoming_pos_x", str(x)
             )
         if "y" in body:
+            y = float(body["y"])
+            updates["pos_y"] = y
             await asyncio.to_thread(
-                store.set_setting, "incoming_pos_y", str(float(body["y"]))
+                store.set_setting, "incoming_pos_y", str(y)
             )
-        return JSONResponse({"ok": True})
+        if updates:
+            await asyncio.to_thread(
+                store.update_incoming_block, first_id, updates
+            )
+        return JSONResponse({"ok": True, "incoming_block_id": first_id})
 
     # ── routes: proxy ─────────────────────────────────────────────────
 
