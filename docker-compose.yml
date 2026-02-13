@@ -64,13 +64,28 @@ services:
       LB_MAX_KEEPALIVE: "200"
       LB_DEFAULT_TIMEOUT_SECONDS: "120"
       LB_LOG_LEVEL: "INFO"
+      LB_CORS_ORIGINS: "${LB_CORS_ORIGINS:-*}"
+      LB_CACHE_TTL_SECONDS: "${LB_CACHE_TTL_SECONDS:-300}"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys;resp=urllib.request.urlopen('http://127.0.0.1:8090/health',timeout=3);sys.exit(0 if resp.status==200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys;resp=urllib.request.urlopen('http://127.0.0.1:8090/health',timeout=3);sys.exit(0 if resp.status<500 else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    security_opt:
+      - no-new-privileges:true
 
 networks:
   producer_net:

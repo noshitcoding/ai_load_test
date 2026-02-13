@@ -3,10 +3,13 @@ WebSocket-Proxy für den LLM Load Tester.
 Browser → WebSocket → dieser Server → HTTP(S) → LiteLLM
 Umgeht das Browser-Limit von 6 gleichzeitigen HTTP/1.1 Verbindungen.
 """
+__version__ = "1.1.0"
+
 import asyncio
 import json
 import os
 import re
+import signal
 import ssl
 import sys
 import traceback
@@ -16,6 +19,11 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s', stream=sys.stdout)
 log = logging.getLogger('ws-proxy')
+
+# Connection metrics
+_active_connections = 0
+_total_connections = 0
+_total_requests = 0
 
 # SSL-Verifikation deaktivieren (für self-signed LiteLLM)
 ssl_ctx = ssl.create_default_context()
@@ -93,6 +101,8 @@ def rewrite_url(url: str) -> str:
 
 async def handle_request(ws, msg):
     """Einzelnen Request verarbeiten: HTTP-Call machen, Antwort zurücksenden."""
+    global _total_requests
+    _total_requests += 1
     req_id = msg.get("id", "?")
     try:
         url = rewrite_url(msg["url"])
@@ -156,7 +166,10 @@ async def handle_request(ws, msg):
 
 async def handler(ws):
     """WebSocket-Verbindung verwalten. Jede Nachricht = 1 HTTP-Request."""
-    log.info(f"WS verbunden: {ws.remote_address}")
+    global _active_connections, _total_connections
+    _active_connections += 1
+    _total_connections += 1
+    log.info(f"WS verbunden: {ws.remote_address} (active={_active_connections})")
     tasks = set()
     try:
         async for raw in ws:
@@ -165,31 +178,50 @@ async def handler(ws):
             except json.JSONDecodeError:
                 await ws.send(json.dumps({"type": "error", "error": "Invalid JSON"}))
                 continue
-            # Jeden Request als eigene Aufgabe starten (parallel)
             task = asyncio.create_task(handle_request(ws, msg))
             tasks.add(task)
             task.add_done_callback(tasks.discard)
     except websockets.exceptions.ConnectionClosed:
         log.info(f"WS getrennt: {ws.remote_address}")
     finally:
-        # Offene Requests bei Disconnect abbrechen
+        _active_connections -= 1
         for t in tasks:
             t.cancel()
 
 
+_shutdown_event = asyncio.Event()
+
+
 async def main():
-    print("WS-Proxy gestartet auf :8765", flush=True)
-    # Suppress noisy websockets internal logs
+    print(f"WS-Proxy v{__version__} gestartet auf :8765", flush=True)
     logging.getLogger("websockets").setLevel(logging.WARNING)
+
+    # Graceful shutdown handler
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, lambda: _shutdown_event.set())
+        except NotImplementedError:
+            pass  # Windows doesn't support add_signal_handler
+
     async with websockets.serve(
         handler,
         "0.0.0.0",
         8765,
-        max_size=10 * 1024 * 1024,  # 10 MB max message
+        max_size=10 * 1024 * 1024,
         ping_interval=30,
         ping_timeout=10,
-    ):
-        await asyncio.Future()  # forever
+    ) as server:
+        log.info(f"WS-Proxy ready (pid={os.getpid()})")
+        await _shutdown_event.wait()
+        log.info("Shutting down gracefully...")
+        server.close()
+        await server.wait_closed()
+        # Close shared HTTP client
+        global http_client
+        if http_client and not http_client.is_closed:
+            await http_client.aclose()
+        log.info(f"Shutdown complete. Total connections: {_total_connections}, requests: {_total_requests}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,34 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Data & temp files
+data/
+*.db
+*.db-wal
+*.db-shm
+*.bak
+*.log
+
+# Tests (not needed in production image)
+tests/
+requirements-dev.txt
+test_*.sh
+test_*.json
+
+# Documentation
+*.md
+LICENSE
