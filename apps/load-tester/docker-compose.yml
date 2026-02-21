@@ -1,0 +1,45 @@
+services:
+  load-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.load-producer
+    ports:
+      - "8088:80"
+    volumes:
+      - ./data:/usr/share/nginx/html/data
+    depends_on:
+      load-producer-proxy:
+        condition: service_healthy
+        required: true
+    networks:
+      - producer_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  load-producer-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.ws-proxy
+    environment:
+      WS_HOST_REWRITES: "localhost:8090=host.docker.internal:8090,127.0.0.1:8090=host.docker.internal:8090"
+    expose:
+      - "8765"
+    networks:
+      - producer_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys;s=socket.socket();s.settimeout(2);s.connect(('127.0.0.1',8765));s.close();sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  producer_net:

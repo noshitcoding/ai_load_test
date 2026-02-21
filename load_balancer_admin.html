@@ -1,1291 +1,900 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="dark">
+<html lang="de">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LLM Load Balancer · Admin</title>
+<title>LLM Load Balancer Admin (React)</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
 <style>
-/* ═══ Reset & Theme ═══ */
+/* ═══ Reset & HPE Theme ═══ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root,[data-theme="dark"]{
-  --bg:#0d1117;--surface:#161b22;--card:#21262d;--card-hover:#292e36;
-  --border:#30363d;--text:#c9d1d9;--muted:#8b949e;--accent:#58a6ff;
-  --accent-hover:#79b8ff;--green:#3fb950;--green-bg:rgba(63,185,80,.12);
-  --red:#f85149;--red-bg:rgba(248,81,73,.12);--amber:#d29922;
-  --amber-bg:rgba(210,153,34,.12);--purple:#8b5cf6;--wire:#58a6ff;
-  --shadow:0 4px 24px rgba(0,0,0,.4);--radius:8px;
-  --toast-bg:#21262d;--modal-bg:#161b22;--overlay:rgba(0,0,0,.55);
-  color-scheme:dark;
-}
-[data-theme="light"]{
-  --bg:#f0f2f5;--surface:#ffffff;--card:#ffffff;--card-hover:#f5f7fa;
-  --border:#d0d7de;--text:#1f2328;--muted:#656d76;--accent:#0969da;
-  --accent-hover:#0550ae;--green:#1a7f37;--green-bg:rgba(26,127,55,.1);
-  --red:#cf222e;--red-bg:rgba(207,34,46,.1);--amber:#bf8700;
-  --amber-bg:rgba(191,135,0,.1);--purple:#8250df;--wire:#0969da;
-  --shadow:0 4px 24px rgba(0,0,0,.06);--radius:8px;
-  --toast-bg:#fff;--modal-bg:#fff;--overlay:rgba(0,0,0,.35);
+:root{
+  --hpe-green:#01A982;--hpe-green-dark:#008567;--hpe-green-light:#17EBA0;
+  --hpe-green-bg:rgba(1,169,130,.06);--hpe-blue:#00739D;--hpe-purple:#7630EA;
+  --bg:#F2F2F2;--surface:#FFFFFF;--card:#FFFFFF;--card-hover:#F7F7F7;
+  --border:#CCCCCC;--border-light:#E8E8E8;--text:#333333;--text-sec:#555555;--muted:#999999;
+  --accent:#01A982;--accent-hover:#008567;
+  --success:#01A982;--success-bg:rgba(1,169,130,.08);
+  --error:#FF4040;--error-bg:rgba(255,64,64,.06);
+  --warning:#FFBC44;--warning-bg:rgba(255,188,68,.08);
+  --info:#00739D;--info-bg:rgba(0,115,157,.06);
+  --wire:#01A982;--wire-token:#7630EA;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow:0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:0 4px 24px rgba(0,0,0,.12);--radius:8px;--radius-lg:12px;
   color-scheme:light;
+  font-family:'Segoe UI','Inter',system-ui,-apple-system,sans-serif;
 }
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
-  height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background .3s,color .3s}
+body{background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
 a{color:var(--accent);text-decoration:none}
 
+/* ═══ Login ═══ */
+.login-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:linear-gradient(135deg,#F2F2F2 0%,#E8F5F1 100%)}
+.login-box{background:#FFF;border-radius:16px;box-shadow:var(--shadow-lg);padding:48px 40px;width:380px;text-align:center}
+.login-box .logo-hpe{font-size:32px;font-weight:700;color:var(--hpe-green);margin-bottom:4px;letter-spacing:-1px}
+.login-box .logo-sub{font-size:13px;color:var(--muted);margin-bottom:32px}
+.login-box .field{text-align:left;margin-bottom:16px}
+.login-box .field label{display:block;font-size:11px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.login-box .field input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font:14px/1.5 inherit;color:var(--text);background:#FFF;transition:border-color .2s,box-shadow .2s}
+.login-box .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--hpe-green-bg)}
+.login-box .btn-login{width:100%;padding:12px;border:none;border-radius:var(--radius);background:var(--hpe-green);color:#FFF;font:600 14px/1.4 inherit;cursor:pointer;transition:background .2s,transform .1s}
+.login-box .btn-login:hover{background:var(--hpe-green-dark)}
+.login-box .btn-login:active{transform:scale(.98)}
+.login-box .btn-login:disabled{opacity:.55;cursor:not-allowed}
+.login-box .err-msg{color:var(--error);font-size:12px;margin-top:12px}
+
 /* ═══ Header ═══ */
-.hdr{display:flex;align-items:center;gap:10px;padding:0 16px;height:46px;
-  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:20}
-.hdr .logo{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;white-space:nowrap}
-.hdr .logo .version{font-size:10px;font-weight:500;padding:1px 6px;border-radius:10px;background:var(--accent);color:#fff;opacity:.85}
-.hdr input,.hdr select{font:12px/1.4 inherit;padding:4px 10px;border-radius:var(--radius);
-  border:1px solid var(--border);background:var(--card);color:var(--text);transition:border-color .2s}
-.hdr input:focus-visible,.hdr select:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(88,166,255,.2)}
+.hdr{display:flex;align-items:center;gap:10px;padding:0 16px;height:50px;
+  background:var(--surface);border-bottom:1px solid var(--border-light);flex-shrink:0;z-index:20;box-shadow:var(--shadow-sm)}
+.hdr .logo{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;white-space:nowrap;color:var(--hpe-green)}
+.hdr .logo .badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--hpe-green);color:#FFF}
+.hdr input,.hdr select{font:12px/1.4 inherit;padding:5px 10px;border-radius:var(--radius);
+  border:1px solid var(--border);background:#FFF;color:var(--text);transition:border-color .2s}
+.hdr input:focus,.hdr select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--hpe-green-bg)}
 .hdr input[type=password]{width:150px}
-.hdr button{font:12px/1.4 inherit;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--border);
-  background:var(--card);color:var(--text);cursor:pointer;transition:all .15s}
-.hdr button:hover{border-color:var(--accent);background:var(--card-hover)}
+.hdr button{font:12px/1.4 inherit;padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
+  background:#FFF;color:var(--text);cursor:pointer;transition:all .15s}
+.hdr button:hover{border-color:var(--accent);color:var(--accent)}
 .hdr button:active{transform:scale(.97)}
-.hdr .sep{width:1px;height:20px;background:var(--border)}
-.hdr .status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
-.hdr .status-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s ease-in-out infinite}
-.hdr .status-dot.err{background:var(--red);box-shadow:0 0 6px var(--red)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.hdr .status{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
-.hdr .theme-toggle{background:transparent;border:none;font-size:16px;cursor:pointer;padding:4px;border-radius:var(--radius);transition:transform .3s}
-.hdr .theme-toggle:hover{transform:scale(1.15)}
-.hdr .kbd-hint{font-size:10px;color:var(--muted);padding:2px 6px;border:1px solid var(--border);
-  border-radius:4px;cursor:pointer;white-space:nowrap;transition:all .15s}
-.hdr .kbd-hint:hover{border-color:var(--accent);color:var(--accent)}
+.hdr .sep{width:1px;height:22px;background:var(--border-light)}
+.hdr .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:background .3s}
+.hdr .dot.ok{background:var(--success);box-shadow:0 0 6px var(--success)}
+.hdr .dot.err{background:var(--error);box-shadow:0 0 4px var(--error)}
+.hdr .status-text{font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr .user-btn{display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);
+  background:#FFF;cursor:pointer;font-size:12px;color:var(--text);transition:border-color .15s}
+.hdr .user-btn:hover{border-color:var(--accent)}
 
 /* ═══ Main ═══ */
 .main{display:flex;flex:1;min-height:0;overflow:hidden}
 
 /* ═══ Canvas ═══ */
-.canvas{flex:1;position:relative;overflow:hidden;background:var(--bg);
-  background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);background-size:24px 24px}
-.canvas svg.wires{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}
-.canvas svg .wire{stroke:var(--wire);stroke-width:2.5;fill:none;opacity:.55;transition:opacity .3s}
-.canvas svg .wire.active{opacity:1;filter:drop-shadow(0 0 6px rgba(88,166,255,.4))}
-.canvas svg .wire.temp{stroke:var(--accent);stroke-dasharray:8 4;opacity:.7}
-.canvas svg .wire-label{fill:var(--muted);font-size:11px;font-family:inherit}
-.canvas .zoom-ctrl{position:absolute;bottom:12px;left:12px;display:flex;gap:4px;z-index:5}
-.canvas .zoom-ctrl button{width:30px;height:30px;border-radius:var(--radius);background:var(--card);
-  border:1px solid var(--border);color:var(--text);cursor:pointer;font-size:14px;
-  display:flex;align-items:center;justify-content:center;transition:all .15s}
-.canvas .zoom-ctrl button:hover{background:var(--card-hover);border-color:var(--accent)}
+.canvas{flex:1;position:relative;overflow:hidden;background:var(--bg);cursor:grab}
+.canvas.panning{cursor:grabbing}
+.canvas .grid-bg{position:absolute;inset:0;
+  background-image:radial-gradient(circle,var(--border) .8px,transparent .8px);background-size:24px 24px;opacity:.5;pointer-events:none}
+.world{position:absolute;top:0;left:0;transform-origin:0 0}
+.wires{position:absolute;top:0;left:0;width:6000px;height:6000px;pointer-events:none;z-index:1}
+.wire{stroke:var(--wire);stroke-width:2.5;fill:none;opacity:.4;transition:opacity .3s}
+.wire.active{opacity:.85;filter:drop-shadow(0 0 4px rgba(1,169,130,.3))}
+.wire-token{stroke:var(--wire-token);opacity:.5}
+.wire-temp{stroke:var(--accent);stroke-dasharray:8 4;opacity:.7}
+.wire-label{fill:var(--muted);font-size:11px;font-family:inherit}
+.canvas .zoom-ctrl{position:absolute;bottom:14px;left:14px;display:flex;gap:4px;z-index:5}
+.canvas .zoom-ctrl button{width:32px;height:32px;border-radius:var(--radius);background:var(--surface);
+  border:1px solid var(--border);color:var(--text);cursor:pointer;font-size:15px;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;box-shadow:var(--shadow-sm)}
+.canvas .zoom-ctrl button:hover{background:var(--card-hover);border-color:var(--accent);color:var(--accent)}
+.canvas .zoom-info{position:absolute;bottom:14px;left:170px;font-size:11px;color:var(--muted);
+  background:var(--surface);padding:4px 10px;border-radius:var(--radius);border:1px solid var(--border-light);z-index:5}
 
 /* ═══ Nodes ═══ */
-.node{position:absolute;width:220px;border-radius:12px;border:1px solid var(--border);background:var(--card);
+.node{position:absolute;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--card);
   box-shadow:var(--shadow);z-index:5;cursor:grab;user-select:none;transition:box-shadow .2s,border-color .2s;
-  animation:nodeIn .3s ease-out}
-@keyframes nodeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.node:hover{box-shadow:0 6px 32px rgba(88,166,255,.15);border-color:var(--accent)}
+  animation:nodeIn .25s ease-out}
+@keyframes nodeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.node:hover{box-shadow:var(--shadow-lg);border-color:var(--accent)}
 .node.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
-.node.incoming{border-color:var(--amber);width:200px}
-.node.incoming:hover{border-color:var(--amber)}
-.node.client-token{width:180px;border-color:var(--purple)}
-.node.client-token:hover{border-color:var(--purple)}
-.node .head{padding:10px 14px 6px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;
-  border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden}
-.node .head .icon{font-size:16px;flex-shrink:0}
-.node .body{padding:8px 14px 10px;font-size:12px;color:var(--muted);display:grid;gap:3px}
-.node .body .row{display:flex;justify-content:space-between}
-.node .body .val{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
-.node .body .bar{height:4px;border-radius:2px;background:var(--border);margin-top:2px}
-.node .body .bar .fill{height:100%;border-radius:2px;transition:width .5s}
+.node-endpoint{width:220px}
+.node-incoming{width:200px;border-color:var(--warning)}
+.node-incoming:hover{border-color:var(--warning)}
+.node-token{width:180px;border-color:var(--hpe-purple)}
+.node-token:hover{border-color:var(--hpe-purple)}
+.node-head{padding:10px 14px 6px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;
+  border-bottom:1px solid var(--border-light);white-space:nowrap;overflow:hidden}
+.node-head .icon{font-size:16px;flex-shrink:0}
+.node-body{padding:8px 14px 10px;font-size:12px;color:var(--text-sec);display:grid;gap:3px}
+.node-row{display:flex;justify-content:space-between}
+.node-row .val{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.node-bar{height:4px;border-radius:2px;background:var(--border-light);margin-top:2px}
+.node-bar .bar-fill{height:100%;border-radius:2px;transition:width .5s}
 .pill{padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;display:inline-block;margin-left:auto;flex-shrink:0}
-.pill.ok{background:var(--green-bg);color:var(--green)}
-.pill.off{background:var(--red-bg);color:var(--red)}
-.pill.warn{background:var(--amber-bg);color:var(--amber)}
+.pill-ok{background:var(--success-bg);color:var(--success)}
+.pill-off{background:var(--error-bg);color:var(--error)}
+.pill-warn{background:var(--warning-bg);color:var(--warning)}
 
 /* ═══ Ports ═══ */
 .port{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--border);
   border:2px solid var(--card);z-index:6;cursor:crosshair;transition:background .15s,transform .15s}
 .port:hover{background:var(--accent);transform:scale(1.3)}
-.port.output{right:-7px;top:50%;margin-top:-7px}
-.port.input{left:-7px;top:50%;margin-top:-7px}
-.port.connected{background:var(--green)}
+.port-out{right:-7px;top:50%;margin-top:-7px}
+.port-in{left:-7px;top:50%;margin-top:-7px}
+.port.connected{background:var(--success)}
 
 /* ═══ Sidebar ═══ */
-.sidebar{width:340px;background:var(--surface);border-left:1px solid var(--border);
-  display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:10;transition:width .3s}
+.sidebar{width:350px;background:var(--surface);border-left:1px solid var(--border-light);
+  display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:10;box-shadow:-2px 0 8px rgba(0,0,0,.03)}
 .sidebar::-webkit-scrollbar{width:6px}
 .sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.sidebar::-webkit-scrollbar-thumb:hover{background:var(--muted)}
-.sb-section{padding:14px 16px;border-bottom:1px solid var(--border)}
-.sb-section h3{font-size:12px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;
+.sb-sec{padding:14px 16px;border-bottom:1px solid var(--border-light)}
+.sb-sec h3{font-size:11px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;
   display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color .2s}
-.sb-section h3:hover{color:var(--text)}
-.sb-section h3 .chev{transition:transform .25s;font-size:10px;opacity:.6}
-.sb-section h3 .chev.shut{transform:rotate(-90deg)}
-.sb-section .sec-body{overflow:hidden;transition:max-height .35s ease,opacity .25s;max-height:2000px;opacity:1}
-.sb-section .sec-body.shut{max-height:0;opacity:0;overflow:hidden}
+.sb-sec h3:hover{color:var(--text)}
+.sb-sec h3 .chev{transition:transform .25s;font-size:10px;opacity:.5}
+.sb-sec h3 .chev.shut{transform:rotate(-90deg)}
+.sb-sec .sec-body{overflow:hidden;transition:max-height .3s ease,opacity .2s;max-height:2000px;opacity:1}
+.sb-sec .sec-body.shut{max-height:0;opacity:0;overflow:hidden}
 .sb-row{display:flex;gap:8px;margin-bottom:8px;align-items:end}
 .sb-field{display:flex;flex-direction:column;gap:3px;flex:1}
-.sb-field label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
-.sb-field input,.sb-field select{font:12px/1.4 inherit;padding:6px 8px;border-radius:6px;
-  border:1px solid var(--border);background:var(--card);color:var(--text);width:100%;transition:border-color .2s,box-shadow .2s}
-.sb-field input:focus-visible,.sb-field select:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(88,166,255,.2)}
-.sb-field input.err{border-color:var(--red);box-shadow:0 0 0 2px rgba(248,81,73,.15)}
-.sb-field .fld-err{font-size:10px;color:var(--red);margin-top:2px;display:none}
-.sb-field .fld-err.on{display:block}
-.sb-btn{font:12px/1.4 inherit;padding:6px 14px;border-radius:6px;border:1px solid var(--border);
-  background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap;transition:all .15s}
-.sb-btn:hover{border-color:var(--accent);background:var(--card-hover)}
+.sb-field label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:600}
+.sb-field input,.sb-field select{font:12px/1.4 inherit;padding:7px 9px;border-radius:6px;
+  border:1px solid var(--border);background:#FFF;color:var(--text);width:100%;transition:border-color .2s,box-shadow .2s}
+.sb-field input:focus,.sb-field select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--hpe-green-bg)}
+.sb-btn{font:12px/1.4 inherit;padding:7px 14px;border-radius:6px;border:1px solid var(--border);
+  background:#FFF;color:var(--text);cursor:pointer;white-space:nowrap;transition:all .15s}
+.sb-btn:hover{border-color:var(--accent);color:var(--accent)}
 .sb-btn:active{transform:scale(.97)}
-.sb-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-.sb-btn.primary:hover{background:var(--accent-hover)}
-.sb-btn.danger{color:var(--red);border-color:var(--red);background:transparent}
-.sb-btn.danger:hover{background:var(--red-bg)}
-.sb-btn.green{color:var(--green);border-color:var(--green);background:transparent}
-.sb-btn.green:hover{background:var(--green-bg)}
-.sb-btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+.sb-btn.primary{background:var(--hpe-green);color:#FFF;border-color:var(--hpe-green)}
+.sb-btn.primary:hover{background:var(--hpe-green-dark)}
+.sb-btn.danger{color:var(--error);border-color:var(--error);background:transparent}
+.sb-btn.danger:hover{background:var(--error-bg)}
+.sb-btn.green{color:var(--success);border-color:var(--success);background:transparent}
+.sb-btn.green:hover{background:var(--success-bg)}
+.sb-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
 .search-wrap{position:relative;margin-bottom:8px}
 .search-wrap .s-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none;color:var(--muted)}
-.search-wrap input{width:100%;padding:6px 10px 6px 28px;border:1px solid var(--border);background:var(--card);
+.search-wrap input{width:100%;padding:7px 10px 7px 28px;border:1px solid var(--border);background:#FFF;
   color:var(--text);border-radius:6px;font-size:12px;transition:border-color .2s}
-.search-wrap input:focus-visible{outline:none;border-color:var(--accent)}
+.search-wrap input:focus{outline:none;border-color:var(--accent)}
 
 /* ═══ Footer ═══ */
-.footer{display:flex;align-items:center;gap:16px;padding:0 16px;height:36px;
-  background:var(--surface);border-top:1px solid var(--border);font-size:12px;color:var(--muted);
-  flex-shrink:0;z-index:20;overflow-x:auto}
+.footer{display:flex;align-items:center;gap:16px;padding:0 16px;height:38px;
+  background:var(--surface);border-top:1px solid var(--border-light);font-size:12px;color:var(--muted);
+  flex-shrink:0;z-index:20;box-shadow:0 -1px 3px rgba(0,0,0,.03)}
 .footer .metric{display:flex;align-items:center;gap:4px;white-space:nowrap}
 .footer .metric .num{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
-.footer .metric .num.warn{color:var(--amber)}
-.footer .metric .num.crit{color:var(--red)}
-.footer .refresh-ts{margin-left:auto;font-size:10px;color:var(--muted);white-space:nowrap}
+.footer .metric .num.warn{color:var(--warning)}
+.footer .metric .num.crit{color:var(--error)}
+.footer .refresh-ts{margin-left:auto;font-size:10px;color:var(--muted)}
 
-/* ═══ Toast Notifications ═══ */
-.toast-box{position:fixed;top:52px;right:16px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+/* ═══ Toast ═══ */
+.toast-wrap{position:fixed;top:56px;right:16px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:var(--radius);
-  background:var(--toast-bg);border:1px solid var(--border);box-shadow:var(--shadow);
-  font-size:12px;color:var(--text);pointer-events:auto;animation:toastIn .3s ease-out;min-width:220px;max-width:380px}
+  background:var(--surface);border:1px solid var(--border-light);box-shadow:var(--shadow-lg);
+  font-size:12px;color:var(--text);pointer-events:auto;animation:toastIn .3s ease-out;min-width:240px;max-width:400px}
 @keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-@keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}
-.toast.out{animation:toastOut .2s ease-in forwards}
+.toast.success{border-left:3px solid var(--success)}
+.toast.error{border-left:3px solid var(--error)}
+.toast.warning{border-left:3px solid var(--warning)}
+.toast.info{border-left:3px solid var(--info)}
 .toast .t-icon{font-size:16px;flex-shrink:0}
-.toast .t-msg{flex:1;line-height:1.4}
-.toast .t-close{cursor:pointer;opacity:.5;font-size:14px;padding:0 2px;flex-shrink:0}
+.toast .t-close{cursor:pointer;opacity:.4;font-size:14px;padding:0 2px;flex-shrink:0}
 .toast .t-close:hover{opacity:1}
-.toast.success{border-left:3px solid var(--green)}
-.toast.error{border-left:3px solid var(--red)}
-.toast.warning{border-left:3px solid var(--amber)}
-.toast.info{border-left:3px solid var(--accent)}
 
 /* ═══ Modal ═══ */
-.modal-ov{position:fixed;inset:0;background:var(--overlay);z-index:900;display:none;align-items:center;justify-content:center}
-.modal-ov.on{display:flex;animation:fadeIn .15s}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:900;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.modal-box{background:var(--modal-bg);border:1px solid var(--border);border-radius:12px;
-  box-shadow:var(--shadow);padding:24px;max-width:420px;width:90%;animation:modalIn .2s ease-out}
+.modal-box{background:#FFF;border:1px solid var(--border-light);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);padding:28px;max-width:420px;width:90%;animation:modalIn .2s ease-out}
 @keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-.modal-box h3{font-size:16px;margin-bottom:8px}
-.modal-box p{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.modal-box h3{font-size:16px;margin-bottom:8px;color:var(--text)}
+.modal-box p{font-size:13px;color:var(--text-sec);margin-bottom:20px;line-height:1.5}
 .modal-box .m-act{display:flex;gap:8px;justify-content:flex-end}
 
 /* ═══ Shortcuts Overlay ═══ */
-.sc-ov{position:fixed;inset:0;background:var(--overlay);z-index:950;display:none;align-items:center;justify-content:center}
-.sc-ov.on{display:flex}
-.sc-panel{background:var(--modal-bg);border:1px solid var(--border);border-radius:12px;
-  box-shadow:var(--shadow);padding:24px 28px;max-width:440px;width:90%;animation:modalIn .2s ease-out}
+.sc-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:950;display:flex;align-items:center;justify-content:center}
+.sc-panel{background:#FFF;border:1px solid var(--border-light);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);padding:24px 28px;max-width:440px;width:90%;animation:modalIn .2s ease-out}
 .sc-panel h3{font-size:16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
-.sc-panel .x-btn{cursor:pointer;opacity:.5;font-size:18px;background:none;border:none;color:var(--text)}.sc-panel .x-btn:hover{opacity:1}
-.sc-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.sc-panel .x-btn{cursor:pointer;opacity:.4;font-size:18px;background:none;border:none;color:var(--text)}
+.sc-panel .x-btn:hover{opacity:1}
+.sc-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-light)}
 .sc-row:last-child{border:none}
-.sc-row .desc{font-size:13px;color:var(--text)}
+.sc-row .desc{font-size:13px}
 .sc-row kbd{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 8px;
   font-size:11px;font-family:monospace;color:var(--muted);min-width:24px;text-align:center}
 
-/* ═══ Loading Overlay ═══ */
-.ld-ov{position:fixed;inset:0;background:var(--overlay);z-index:800;display:none;align-items:center;justify-content:center}
-.ld-ov.on{display:flex}
-.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+/* ═══ Loading ═══ */
+.ld-ov{position:fixed;inset:0;background:rgba(255,255,255,.6);z-index:800;display:flex;align-items:center;justify-content:center}
+.spinner{width:36px;height:36px;border:3px solid var(--border-light);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ═══ Responsive ═══ */
-@media(max-width:900px){
-  .sidebar{width:280px}
-  .hdr .logo .version,.hdr .kbd-hint{display:none}
-}
-@media(max-width:640px){
-  .main{flex-direction:column}
-  .sidebar{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--border)}
-  .canvas{min-height:40vh}
-  .footer{gap:10px;height:auto;padding:6px 12px;flex-wrap:wrap}
-}
+@media(max-width:900px){.sidebar{width:280px}}
+@media(max-width:640px){.main{flex-direction:column}.sidebar{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--border-light)}.canvas{min-height:40vh}}
 </style>
 </head>
 <body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+<script type="text/babel" data-presets="env,react">
+const {useState,useEffect,useMemo,useRef,useCallback}=React;
 
-<!-- ═══ Header ═══ -->
-<div class="hdr" role="banner">
-  <div class="logo">⚡ LB Admin <span class="version" id="versionBadge">v3</span></div>
-  <div class="sep"></div>
-  <input id="adminToken" type="password" placeholder="Admin Token…" onchange="saveToken()" aria-label="Admin Token"/>
-  <div class="sep"></div>
-  <label style="font-size:12px;color:var(--muted)" for="routingMode">Routing:</label>
-  <select id="routingMode" onchange="setRoutingMode(this.value)" aria-label="Routing-Modus">
-    <option value="percentage">Prozentual</option>
-    <option value="priority">Priorität</option>
-  </select>
-  <div id="prioInputWrap" style="display:none;align-items:center;gap:6px">
-    <label style="font-size:12px;color:var(--muted)">Prio-Eingang:</label>
-    <select id="priorityInput" onchange="setPriorityInput(this.value)" aria-label="Priorisierter Eingang"></select>
-  </div>
-  <div class="sep"></div>
-  <button onclick="loadState()" title="Aktualisieren (R)" aria-label="Aktualisieren">⟳</button>
-  <button style="font-size:11px;color:var(--red);border-color:var(--red);background:transparent" onclick="resetStats()" aria-label="Stats zurücksetzen">Stats Reset</button>
-  <div style="flex:1"></div>
-  <button class="theme-toggle" onclick="toggleTheme()" title="Theme (T)" aria-label="Theme wechseln" id="themeBtn">🌙</button>
-  <div class="status-dot" id="statusDot" title="Verbindungsstatus"></div>
-  <span class="status" id="status">—</span>
-  <span class="kbd-hint" onclick="toggleShortcuts()" title="Tastenkürzel (?)">⌨ Shortcuts</span>
-</div>
+/* ═══ Constants ═══ */
+const NODE_W={endpoint:220,incoming:200,token:180};
+const NODE_H={endpoint:230,incoming:100,token:110};
+const TOAST_ICONS={success:'\u2705',error:'\u274c',warning:'\u26a0\ufe0f',info:'\u2139\ufe0f'};
+const uid=()=>`${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+const bezier=(x1,y1,x2,y2)=>{const cp=Math.min(Math.abs(x2-x1)*.5,150);return`M ${x1} ${y1} C ${x1+cp} ${y1}, ${x2-cp} ${y2}, ${x2} ${y2}`};
 
-<!-- ═══ Main ═══ -->
-<div class="main" role="main">
-
-  <!-- Canvas -->
-  <div class="canvas" id="canvas" role="application" aria-label="Node-Canvas">
-    <svg class="wires" id="wireSvg"></svg>
-    <div class="zoom-ctrl">
-      <button onclick="zoomCanvas(-1)" title="Verkleinern">−</button>
-      <button onclick="zoomCanvas(0)" title="Zurücksetzen">⊙</button>
-      <button onclick="zoomCanvas(1)" title="Vergrößern">+</button>
-    </div>
-  </div>
-
-  <!-- Sidebar -->
-  <div class="sidebar" id="sidebar" role="complementary" aria-label="Sidebar">
-    <div class="sb-section" id="sbInfo">
-      <h3 onclick="togSec('info')">Info <span class="chev" id="chInfo">▾</span></h3>
-      <div class="sec-body" id="bInfo">
-        <p style="font-size:12px;color:var(--muted)">Klicke auf einen Endpoint-Knoten, um dessen Details zu sehen.
-        Ziehe vom <b>Ausgang</b> eines Incoming-Knotens zu einem <b>Eingang</b> eines Endpoints, um eine Verbindung herzustellen.</p>
-      </div>
-    </div>
-
-    <div class="sb-section" id="sbDetail" style="display:none">
-      <h3>Endpoint Details</h3>
-      <div id="detailContent"></div>
-    </div>
-
-    <div class="sb-section">
-      <h3 onclick="togSec('addEp')">+ Endpoint hinzufügen <span class="chev" id="chAddEp">▾</span></h3>
-      <div class="sec-body" id="bAddEp">
-        <div class="sb-row"><div class="sb-field"><label>Name</label><input id="newName" placeholder="vllm-eu-1"/></div></div>
-        <div class="sb-row"><div class="sb-field"><label>Base URL</label><input id="newUrl" placeholder="https://host:8000/v1"/></div></div>
-        <div class="sb-row"><div class="sb-field"><label>API Key</label><input id="newKey" type="password" placeholder="sk-..."/></div></div>
-        <div class="sb-row">
-          <div class="sb-field"><label>Quota %</label><input id="newQuota" type="number" min="0" max="100" value="0"/></div>
-          <div class="sb-field"><label>Priorität</label><input id="newPriority" type="number" min="1" max="100" value="10"/></div>
-        </div>
-        <div class="sb-row">
-          <div class="sb-field"><label>Max Parallel</label><input id="newMaxC" type="number" min="0" value="0"/></div>
-          <div class="sb-field"><label>Timeout (s)</label><input id="newTimeout" type="number" min="5" value="120"/></div>
-        </div>
-        <div class="sb-row">
-          <div class="sb-field"><label>TLS prüfen</label><select id="newTls"><option value="1">Ja</option><option value="0">Nein</option></select></div>
-          <div class="sb-field"><label>Sofort verbinden</label><select id="newConn"><option value="1">Ja</option><option value="0">Nein</option></select></div>
-        </div>
-        <div class="sb-row" style="margin-top:6px"><button class="sb-btn primary" onclick="createEndpoint()">Endpoint anlegen</button></div>
-      </div>
-    </div>
-
-    <div class="sb-section">
-      <h3 onclick="togSec('inc')">Incoming-Blöcke <span class="chev" id="chInc">▾</span></h3>
-      <div class="sec-body" id="bInc">
-        <div id="incomingBlockList"></div>
-        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-          <div class="sb-row"><div class="sb-field"><label>Block-Name</label><input id="newIncomingName" placeholder="z.B. Setup A"/></div></div>
-          <div class="sb-row" style="margin-top:4px"><button class="sb-btn primary" onclick="createIncomingBlock()">Incoming-Block erstellen</button></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="sb-section">
-      <h3 onclick="togSec('tok')">Client-Zugang <span class="chev" id="chTok">▾</span></h3>
-      <div class="sec-body" id="bTok">
-        <p style="font-size:11px;color:var(--muted);word-break:break-all">
-          Base-URL: <span style="color:var(--text)" id="clientUrl">—</span>
-        </p>
-        <div class="search-wrap" id="tokenSearchWrap" style="margin-top:8px;display:none">
-          <span class="s-icon">🔍</span>
-          <input id="tokenSearch" placeholder="Token suchen…" oninput="renderTokenList()" aria-label="Token suchen"/>
-        </div>
-        <div id="tokenList" style="margin-top:8px"></div>
-        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-          <div class="sb-row"><div class="sb-field"><label>Token-Name</label><input id="newTokenName" placeholder="z.B. load-tester-1"/></div></div>
-          <div class="sb-row"><div class="sb-field"><label>Token (leer=auto)</label><input id="newTokenValue" placeholder="auto-generiert"/></div></div>
-          <div class="sb-row"><div class="sb-field"><label>Incoming-Block</label><select id="newTokenIncoming"></select></div></div>
-          <div class="sb-row" style="margin-top:4px"><button class="sb-btn primary" onclick="createClientToken()">Token erstellen</button></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ═══ Footer ═══ -->
-<div class="footer" role="contentinfo">
-  <div class="metric">Token/s: <span class="num" id="fTps">0</span></div>
-  <div class="metric">Req/s: <span class="num" id="fRps">0</span></div>
-  <div class="metric">In-Flight: <span class="num" id="fInf">0</span></div>
-  <div class="metric">Endpoints: <span class="num" id="fEps">0</span></div>
-  <div class="metric">Verbunden: <span class="num" id="fConn">0</span></div>
-  <div class="metric">Modus: <span class="num" id="fMode">—</span></div>
-  <span class="refresh-ts" id="refreshTs">—</span>
-</div>
-
-<!-- ═══ Toast Container ═══ -->
-<div class="toast-box" id="toastBox" role="alert" aria-live="polite"></div>
-
-<!-- ═══ Confirmation Modal ═══ -->
-<div class="modal-ov" id="modalOv" role="dialog" aria-modal="true" aria-labelledby="mTitle">
-  <div class="modal-box">
-    <h3 id="mTitle">Bestätigung</h3>
-    <p id="mMsg">Sind Sie sicher?</p>
-    <div class="m-act">
-      <button class="sb-btn" id="mCancel">Abbrechen</button>
-      <button class="sb-btn danger" id="mConfirm">Bestätigen</button>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ Keyboard Shortcuts ═══ -->
-<div class="sc-ov" id="scOv">
-  <div class="sc-panel" role="dialog" aria-label="Tastenkürzel">
-    <h3>Tastenkürzel <button class="x-btn" onclick="toggleShortcuts()">✕</button></h3>
-    <div class="sc-row"><span class="desc">Aktualisieren</span><kbd>R</kbd></div>
-    <div class="sc-row"><span class="desc">Theme wechseln</span><kbd>T</kbd></div>
-    <div class="sc-row"><span class="desc">Tastenkürzel</span><kbd>?</kbd></div>
-    <div class="sc-row"><span class="desc">Auswahl aufheben</span><kbd>Esc</kbd></div>
-    <div class="sc-row"><span class="desc">Token suchen</span><kbd>/</kbd></div>
-  </div>
-</div>
-
-<!-- ═══ Loading Overlay ═══ -->
-<div class="ld-ov" id="ldOv"><div class="spinner"></div></div>
-
-<script>
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  State & Helpers                                                            */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-const S = {state: null, selected: null, fullTokens: []};
-let isDragging = false;
-let wireDrawing = null;
-let lastFormEditAt = 0;
-let retryCount = 0;
-let canvasScale = 1;
-const COLLAPSED = JSON.parse(localStorage.getItem('lb_collapsed')||'{}');
-
-const $ = id => document.getElementById(id);
-const esc = v => String(v||'').replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]||c);
-function getToken(){ return localStorage.getItem('lb_admin_token')||'' }
-function saveToken(){ localStorage.setItem('lb_admin_token', $('adminToken').value.trim()); toast('Token gespeichert','success'); loadState() }
-
-function adminHeaders(extra){
-  const h = Object.assign({'Content-Type':'application/json'}, extra||{});
-  h['X-Admin-Token'] = getToken();
-  return h;
-}
-function getIncomingBlocks(){
-  if(S.state?.incoming_blocks?.length) return S.state.incoming_blocks;
-  if(S.state?.incoming_pos){
-    return [{id:1,name:'Incoming 1',pos_x:S.state.incoming_pos.x||256,pos_y:S.state.incoming_pos.y||300}];
-  }
-  return [{id:1,name:'Incoming 1',pos_x:256,pos_y:300}];
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Toast Notification System                                                  */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-const TOAST_ICONS = {success:'\u2705',error:'\u274c',warning:'\u26a0\ufe0f',info:'\u2139\ufe0f'};
-function toast(msg, type='info', duration=3500){
-  const box = $('toastBox');
-  const el = document.createElement('div');
-  el.className = 'toast ' + type;
-  el.innerHTML = '<span class="t-icon">'+(TOAST_ICONS[type]||'')+'</span><span class="t-msg">'+esc(msg)+'</span><span class="t-close" onclick="this.parentElement.remove()">\u2715</span>';
-  box.appendChild(el);
-  setTimeout(()=>{ el.classList.add('out'); setTimeout(()=>el.remove(), 250); }, duration);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Confirmation Modal                                                         */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-let _modalResolve = null;
-function showConfirm(title, message, btnText){
-  return new Promise(resolve => {
-    _modalResolve = resolve;
-    $('mTitle').textContent = title||'Bestätigung';
-    $('mMsg').textContent = message||'Sind Sie sicher?';
-    const confirmBtn = $('mConfirm');
-    confirmBtn.textContent = btnText||'Bestätigen';
-    $('modalOv').classList.add('on');
-    confirmBtn.focus();
-  });
-}
-function closeModal(result){
-  $('modalOv').classList.remove('on');
-  if(_modalResolve){ _modalResolve(result); _modalResolve=null; }
-}
-$('mCancel').onclick = ()=> closeModal(false);
-$('mConfirm').onclick = ()=> closeModal(true);
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Theme Toggle                                                               */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-function applyTheme(theme){
-  document.documentElement.setAttribute('data-theme', theme);
-  $('themeBtn').textContent = theme==='dark' ? '\U0001f319' : '\u2600\ufe0f';
-  localStorage.setItem('lb_theme', theme);
-}
-function toggleTheme(){
-  const cur = document.documentElement.getAttribute('data-theme')||'dark';
-  applyTheme(cur==='dark'?'light':'dark');
-}
-// Apply saved theme on load
-(function(){ const t = localStorage.getItem('lb_theme'); if(t) applyTheme(t); })();
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Keyboard Shortcuts                                                         */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-function toggleShortcuts(){ $('scOv').classList.toggle('on'); }
-document.addEventListener('keydown', e=>{
-  // Skip if user is typing in an input/select/textarea
-  const tag = document.activeElement?.tagName;
-  if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA') return;
-  const key = e.key.toLowerCase();
-  if(key==='r'){ e.preventDefault(); loadState(); }
-  else if(key==='t'){ e.preventDefault(); toggleTheme(); }
-  else if(key==='?'||key==='/'&&e.shiftKey){ e.preventDefault(); toggleShortcuts(); }
-  else if(key==='escape'){
-    if($('scOv').classList.contains('on')) toggleShortcuts();
-    else if($('modalOv').classList.contains('on')) closeModal(false);
-    else if(S.selected){ S.selected=null; renderAll(); }
-  }
-  else if(key==='/' && !e.shiftKey){
-    e.preventDefault();
-    const si = $('tokenSearch');
-    if(si){ si.focus(); si.select(); }
-  }
-});
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Section Toggle (Collapsible)                                               */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-function togSec(id){
-  const body = $('b'+id.charAt(0).toUpperCase()+id.slice(1));
-  const chev = $('ch'+id.charAt(0).toUpperCase()+id.slice(1));
-  if(!body) return;
-  const shut = !body.classList.contains('shut');
-  body.classList.toggle('shut', shut);
-  if(chev) chev.classList.toggle('shut', shut);
-  COLLAPSED[id] = shut;
-  localStorage.setItem('lb_collapsed', JSON.stringify(COLLAPSED));
-}
-// Restore collapsed state
-(function(){
-  Object.keys(COLLAPSED).forEach(id=>{
-    if(COLLAPSED[id]) togSec(id); // will toggle to shut
-  });
-})();
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Canvas Zoom                                                                */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-function zoomCanvas(dir){
-  if(dir===0) canvasScale=1;
-  else canvasScale = Math.min(2, Math.max(0.5, canvasScale + dir*0.1));
-  const c = $('canvas');
-  c.style.transform = 'scale('+canvasScale+')';
-  c.style.transformOrigin = 'top left';
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Loading State                                                              */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-let _loading = 0;
-function showLoading(){ _loading++; if(_loading===1) $('ldOv').classList.add('on'); }
-function hideLoading(){ _loading = Math.max(0,_loading-1); if(_loading===0) $('ldOv').classList.remove('on'); }
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Status indicator                                                           */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-function setStatus(t, ok){
-  const el=$('status'); el.textContent=t;
-  el.style.color=ok?'var(--green)':'var(--red)';
-  const dot=$('statusDot');
-  dot.className = 'status-dot ' + (ok?'ok':'err');
-  dot.title = ok?'Verbunden':'Verbindungsfehler';
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  API Wrapper                                                                */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-async function api(path, opts){
-  const o = Object.assign({method:'GET'}, opts||{});
-  o.headers = adminHeaders(o.headers);
-  const r = await fetch(path, o);
-  const txt = await r.text();
-  let d; try{ d=txt?JSON.parse(txt):null }catch(e){ d={raw:txt} }
-  if(!r.ok) throw new Error((d&&(d.detail||d.error))||r.status+' '+r.statusText);
-  return d;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Version fetch                                                              */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-async function fetchVersion(){
-  try{
-    const d = await api('/health');
-    if(d && d.version) $('versionBadge').textContent = 'v'+d.version;
-  }catch(e){}
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Rendering                                                                  */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-const canvasEl = $('canvas');
-const wireSvg  = $('wireSvg');
-
-function renderAll(skipDetail){
-  if(!S.state) return;
-  const st = S.state;
-  const incomingBlocks = getIncomingBlocks();
-  $('routingMode').value = st.routing_mode;
-  renderPriorityInputControl(st);
-  canvasEl.querySelectorAll('.node').forEach(n=>n.remove());
-
-  // Client Token nodes (left)
-  let nextTokenY = 80;
-  (st.client_tokens||[]).forEach((ct,i) => {
-    const x = ct.pos_x || 80;
-    const y = ct.pos_y || nextTokenY;
-    nextTokenY = y + 130;
-    const n = mkClientTokenNode(ct);
-    n.style.left = x + 'px';
-    n.style.top = y + 'px';
-    canvasEl.appendChild(n);
-  });
-
-  // Incoming nodes (center)
-  incomingBlocks.forEach((ib, idx) => {
-    const inc = mkNode('incoming', {
-      block: ib,
-      x: ib.pos_x,
-      y: ib.pos_y,
-      stats: st.stats,
-      index: idx,
-    });
-    canvasEl.appendChild(inc);
-  });
-
-  // Endpoint nodes (right)
-  const totalTok = st.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
-  let nextY = 80;
-  st.endpoints.forEach((ep,i) => {
-    if(ep.pos_y < 10 && ep.pos_x < 10){ ep.pos_x = 420; ep.pos_y = nextY; nextY += 160; }
-    const n = mkNode('endpoint', {x:ep.pos_x, y:ep.pos_y, ep, totalTok});
-    canvasEl.appendChild(n);
-  });
-
-  renderWires();
-  renderFooter();
-  if(!skipDetail) renderDetail();
-}
-
-function mkClientTokenNode(ct){
-  const el = document.createElement('div');
-  el.className = 'node client-token';
-  el.dataset.type = 'client-token';
-  el.dataset.id = ct.id;
-  el.innerHTML = `
-    <div class="head"><span class="icon">\U0001f511</span> ${esc(ct.name)}</div>
-    <div class="body">
-      <div class="row"><span>Requests</span><span class="val">${ct.total_requests}</span></div>
-      <div class="row"><span>Req/s</span><span class="val">${ct.requests_per_second||0}</span></div>
-      <div class="row"><span>Prompt Tok</span><span class="val">${(ct.prompt_tokens_total||0).toLocaleString()}</span></div>
-      <div class="row"><span>Compl Tok</span><span class="val">${(ct.completion_tokens_total||0).toLocaleString()}</span></div>
-    </div>`;
-  const port = document.createElement('div');
-  port.className = 'port output connected';
-  port.style.background = 'var(--purple)';
-  port.title = 'Verbindung zum Incoming';
-  el.appendChild(port);
-  el.addEventListener('mousedown', onNodeDown);
-  return el;
-}
-
-function mkNode(type, cfg){
-  const el = document.createElement('div');
-  el.className = 'node' + (type==='incoming'?' incoming':'') + (S.selected && cfg.ep && S.selected==cfg.ep.id?' selected':'');
-  el.style.left = cfg.x + 'px';
-  el.style.top  = cfg.y + 'px';
-
-  if(type==='incoming'){
-    el.dataset.type = 'incoming';
-    el.dataset.id = cfg.block?.id || '';
-    const title = cfg.block?.name || 'Incoming';
-    el.innerHTML = `
-      <div class="head"><span class="icon">\u26a1</span> ${esc(title)}</div>
-      <div class="body">
-        <div class="row"><span>In-Flight</span><span class="val">${cfg.stats.total_inflight}</span></div>
-        <div class="row"><span>Req/s</span><span class="val">${cfg.stats.requests_per_second}</span></div>
-        <div class="row"><span>Token/s</span><span class="val">${cfg.stats.tokens_per_second}</span></div>
-      </div>`;
-    const inPort = document.createElement('div');
-    inPort.className = 'port input connected';
-    inPort.style.pointerEvents = 'none';
-    el.appendChild(inPort);
-    const port = document.createElement('div');
-    port.className = 'port output';
-    port.title = 'Ziehen zum Verbinden';
-    el.appendChild(port);
-    port.addEventListener('mousedown', onPortDown);
-  } else {
-    const ep = cfg.ep;
-    el.dataset.type = 'endpoint';
-    el.dataset.id = ep.id;
-    const ok = ep.enabled && ep.cooldown_remaining_s<=0;
-    const statusPill = !ep.enabled ? '<span class="pill off">AUS</span>'
-      : ep.cooldown_remaining_s > 0 ? '<span class="pill warn">COOLDOWN</span>'
-      : '<span class="pill ok">OK</span>';
-    const actualPct = cfg.totalTok > 0 ? (ep.completion_tokens_total / cfg.totalTok * 100).toFixed(1) : '0.0';
-    const successRate = ep.total_requests > 0 ? ((ep.total_success/ep.total_requests)*100).toFixed(0)+'%' : '\u2014';
-    const tps = S.state.stats.tokens_per_second > 0 && cfg.totalTok > 0
-      ? (ep.completion_tokens_total / cfg.totalTok * S.state.stats.tokens_per_second).toFixed(1) : '0';
-    el.innerHTML = `
-      <div class="head"><span class="icon">${ep.connected?'\U0001f7e2':'\u26aa'}</span> ${esc(ep.name)} ${statusPill}</div>
-      <div class="body">
-        <div class="row"><span>Quota</span><span class="val">${ep.token_quota_percent}%</span></div>
-        <div class="row"><span>Ist</span><span class="val">${actualPct}%</span></div>
-        <div class="bar"><div class="fill" style="width:${Math.min(100,actualPct)}%;background:${ok?'var(--accent)':'var(--red)'}"></div></div>
-        <div class="row"><span>In-Flight</span><span class="val">${ep.inflight}</span></div>
-        <div class="row"><span>Token/s</span><span class="val">${tps}</span></div>
-        <div class="row"><span>Latenz</span><span class="val">${(ep.avg_latency_ms||0).toFixed(0)}ms</span></div>
-        <div class="row"><span>Erfolg</span><span class="val">${successRate}</span></div>
-        <div class="row"><span>Prio</span><span class="val">#${ep.priority_order}</span></div>
-      </div>`;
-    const port = document.createElement('div');
-    port.className = 'port input' + (ep.connected?' connected':'');
-    port.title = ep.connected ? 'Verbunden \u2013 Klick zum Trennen' : 'Nicht verbunden';
-    port.addEventListener('mousedown', (e)=>{ e.stopPropagation(); toggleConn(ep.id, !ep.connected) });
-    el.appendChild(port);
-  }
-  el.addEventListener('mousedown', onNodeDown);
-  return el;
-}
-
-/* ─── Wires ──── */
-function renderWires(){
-  wireSvg.innerHTML = '';
-  if(!S.state) return;
-  const incomingEls = Array.from(canvasEl.querySelectorAll('.node.incoming'));
-  if(incomingEls.length===0) return;
-  const incomingById = new Map();
-  incomingEls.forEach(el=>{
-    const bid = parseInt(el.dataset.id||'0',10);
-    if(bid>0) incomingById.set(bid, el);
-  });
-  const defaultIncomingEl = incomingEls[0];
-  const cr = canvasEl.getBoundingClientRect();
-
-  // Wires: Client Tokens -> Incoming
-  (S.state.client_tokens||[]).forEach(ct => {
-    const ctEl = canvasEl.querySelector(`.node.client-token[data-id="${ct.id}"]`);
-    if(!ctEl) return;
-    const outPort = ctEl.querySelector('.port.output');
-    if(!outPort) return;
-    const targetIncoming = incomingById.get(parseInt(ct.incoming_block_id||'0',10)) || defaultIncomingEl;
-    if(!targetIncoming) return;
-    const oR = outPort.getBoundingClientRect();
-    const x1 = oR.left - cr.left + oR.width/2;
-    const y1 = oR.top - cr.top + oR.height/2;
-    const x2 = targetIncoming.offsetLeft;
-    const y2 = targetIncoming.offsetTop + targetIncoming.offsetHeight / 2;
-    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d', bezier(x1,y1,x2,y2));
-    path.setAttribute('class', 'wire active');
-    path.setAttribute('style', 'stroke:var(--purple);opacity:.6');
-    wireSvg.appendChild(path);
-  });
-
-  // Wires: Incoming -> Endpoints
-  incomingEls.forEach(incEl => {
-    const outPort = incEl.querySelector('.port.output');
-    if(!outPort) return;
-    S.state.endpoints.filter(e=>e.connected).forEach(ep=>{
-      const epEl = canvasEl.querySelector(`.node[data-id="${ep.id}"][data-type="endpoint"]`);
-      if(!epEl) return;
-      const inPort = epEl.querySelector('.port.input');
-      if(!inPort) return;
-      const or2 = outPort.getBoundingClientRect();
-      const ir = inPort.getBoundingClientRect();
-      const x1 = or2.left - cr.left + or2.width/2;
-      const y1 = or2.top  - cr.top  + or2.height/2;
-      const x2 = ir.left - cr.left + ir.width/2;
-      const y2 = ir.top  - cr.top  + ir.height/2;
-      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-      path.setAttribute('d', bezier(x1,y1,x2,y2));
-      path.setAttribute('class', 'wire'+(ep.inflight>0?' active':''));
-      wireSvg.appendChild(path);
-      const mx = (x1+x2)/2, my = (y1+y2)/2 - 8;
-      const totalTok = S.state.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
-      const pct = totalTok > 0 ? (ep.completion_tokens_total/totalTok*100).toFixed(0)+'%' : '\u2014';
-      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
-      lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
-      lbl.setAttribute('class','wire-label');
-      lbl.setAttribute('text-anchor','middle');
-      lbl.textContent = pct;
-      wireSvg.appendChild(lbl);
-    });
-  });
-}
-
-function bezier(x1,y1,x2,y2){
-  const cp = Math.min(Math.abs(x2-x1)*0.5, 150);
-  return `M ${x1} ${y1} C ${x1+cp} ${y1}, ${x2-cp} ${y2}, ${x2} ${y2}`;
-}
-
-/* ─── Footer ── */
-function renderLiveStats(){
-  const st = S.state;
-  if(!st) return;
-  const tps = $('fTps'), rps=$('fRps'), inf=$('fInf');
-  tps.textContent = st.stats.tokens_per_second;
-  rps.textContent = st.stats.requests_per_second;
-  inf.textContent = st.stats.total_inflight;
-  // Color-code inflight
-  inf.className = 'num' + (st.stats.total_inflight > 50 ? ' crit' : st.stats.total_inflight > 20 ? ' warn' : '');
-  $('fEps').textContent = st.endpoints.length;
-  $('fConn').textContent = st.endpoints.filter(e=>e.connected).length;
-  $('fMode').textContent = st.routing_mode === 'priority' ? 'Priorit\u00e4t' : 'Prozentual';
-  $('clientUrl').textContent = location.origin + '/v1';
-  // Refresh timestamp
-  $('refreshTs').textContent = '\u27f3 ' + new Date().toLocaleTimeString();
-}
-
-function renderFooter(){
-  renderLiveStats();
-  renderIncomingBlockList();
-  renderTokenList();
-}
-
-/* ─── Priority Input ── */
-function renderPriorityInputControl(st){
-  const wrap = $('prioInputWrap');
-  const sel = $('priorityInput');
-  if(!wrap || !sel) return;
-  if(!st || st.routing_mode!=='priority'){
-    wrap.style.display = 'none';
-    return;
-  }
-  wrap.style.display = 'flex';
-  const tokens = st.client_tokens || [];
-  let html = '<option value="0">(kein priorisierter Eingang)</option>';
-  html += tokens.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
-  sel.innerHTML = html;
-  sel.value = String(st.priority_input_token_id || 0);
-}
-
-/* ─── Detail panel ── */
-function selectEndpoint(id){
-  S.selected = S.selected===id ? null : id;
-  canvasEl.querySelectorAll('.node').forEach(n=>n.classList.remove('selected'));
-  if(S.selected){
-    const el = canvasEl.querySelector(`.node[data-id="${S.selected}"]`);
-    if(el) el.classList.add('selected');
-  }
-  const ae = document.activeElement;
-  if(ae && ae.closest('#detailContent')) ae.blur();
-  renderDetail();
-}
-
-function renderDetail(){
-  const sec = $('sbDetail');
-  const info = $('sbInfo');
-  if(!S.selected || !S.state){ sec.style.display='none'; info.style.display=''; return; }
-  const ep = S.state.endpoints.find(e=>e.id===S.selected);
-  if(!ep){ sec.style.display='none'; info.style.display=''; return; }
-  const dc = $('detailContent');
-  const ae = document.activeElement;
-  if(dc && ae && dc.contains(ae) && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA')) return;
-  sec.style.display=''; info.style.display='none';
-  const totalTok = S.state.endpoints.reduce((s,e)=>s+e.completion_tokens_total,0);
-  const actualPct = totalTok>0?(ep.completion_tokens_total/totalTok*100).toFixed(1):'0.0';
-  $('detailContent').innerHTML = `
-    <div class="sb-row"><div class="sb-field"><label>Name</label><input id="dName" value="${esc(ep.name)}"/></div></div>
-    <div class="sb-row"><div class="sb-field"><label>Base URL</label><input id="dUrl" value="${esc(ep.base_url)}"/></div></div>
-    <div class="sb-row"><div class="sb-field"><label>API Key (leer=unver\u00e4ndert)</label><input id="dKey" type="password" placeholder="(unver\u00e4ndert)"/></div></div>
-    <div class="sb-row">
-      <div class="sb-field"><label>Quota %</label><input id="dQuota" type="number" min="0" max="100" value="${ep.token_quota_percent}"/></div>
-      <div class="sb-field"><label>Ist %</label><input value="${actualPct}" disabled style="opacity:.6"/></div>
-    </div>
-    <div class="sb-row">
-      <div class="sb-field"><label>Priorit\u00e4t</label><input id="dPrio" type="number" min="1" max="100" value="${ep.priority_order}"/></div>
-      <div class="sb-field"><label>Max Parallel</label><input id="dMaxC" type="number" min="0" value="${ep.max_concurrent}"/></div>
-    </div>
-    <div class="sb-row">
-      <div class="sb-field"><label>Timeout (s)</label><input id="dTimeout" type="number" min="5" value="${ep.timeout_seconds}"/></div>
-      <div class="sb-field"><label>TLS pr\u00fcfen</label><select id="dTls"><option value="1"${ep.verify_tls?' selected':''}>Ja</option><option value="0"${!ep.verify_tls?' selected':''}>Nein</option></select></div>
-    </div>
-    <div class="sb-row">
-      <div class="sb-field"><label>Aktiviert</label><select id="dEnabled"><option value="1"${ep.enabled?' selected':''}>Ja</option><option value="0"${!ep.enabled?' selected':''}>Nein</option></select></div>
-      <div class="sb-field"><label>Verbunden</label><select id="dConnected"><option value="1"${ep.connected?' selected':''}>Ja</option><option value="0"${!ep.connected?' selected':''}>Nein</option></select></div>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin:6px 0">
-      API Key: ${esc(ep.api_key_preview)} | Req: ${ep.total_requests} | OK: ${ep.total_success} | P-Tok: ${ep.prompt_tokens_total.toLocaleString()} | C-Tok: ${ep.completion_tokens_total.toLocaleString()}
-    </div>
-    <div class="sb-row" style="gap:6px">
-      <button class="sb-btn primary" onclick="saveEndpoint(${ep.id})">Speichern</button>
-      <button class="sb-btn ${ep.connected?'danger':'green'}" onclick="toggleConn(${ep.id},${!ep.connected})">${ep.connected?'Trennen':'Verbinden'}</button>
-      <button class="sb-btn danger" onclick="deleteEndpoint(${ep.id})">L\u00f6schen</button>
-    </div>`;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Drag & Wire-Drawing                                                        */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-let dragState = null;
-
-function onNodeDown(e){
-  if(e.target.closest('.port')) return;
-  const node = e.currentTarget;
-  e.preventDefault();
-  isDragging = true;
-  dragState = {
-    el: node,
-    type: node.dataset.type,
-    id: node.dataset.id || null,
-    startX: e.clientX,
-    startY: e.clientY,
-    origLeft: node.offsetLeft,
-    origTop: node.offsetTop,
-    moved: false
+/* ═══ API helper ═══ */
+function makeApi(tokenRef){
+  return async(path,opts={})=>{
+    const h=Object.assign({'Content-Type':'application/json','X-Admin-Token':tokenRef.current||''},opts.headers||{});
+    const r=await fetch(path,{...opts,headers:h});
+    const txt=await r.text();
+    let d;try{d=txt?JSON.parse(txt):null}catch{d={raw:txt}}
+    if(!r.ok)throw new Error((d&&(d.detail||d.error))||r.status+' '+r.statusText);
+    return d;
   };
 }
 
-document.addEventListener('mousemove', e=>{
-  if(dragState){
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
-    if(Math.abs(dx)>3||Math.abs(dy)>3) dragState.moved = true;
-    dragState.el.style.left = (dragState.origLeft + dx) + 'px';
-    dragState.el.style.top  = (dragState.origTop  + dy) + 'px';
-    renderWires();
-  }
-  if(wireDrawing){
-    const cr = canvasEl.getBoundingClientRect();
-    const x2 = e.clientX - cr.left;
-    const y2 = e.clientY - cr.top;
-    const tw = document.getElementById('temp-wire');
-    if(tw) tw.setAttribute('d', bezier(wireDrawing.x1, wireDrawing.y1, x2, y2));
-  }
-});
-
-document.addEventListener('mouseup', e=>{
-  if(dragState){
-    if(dragState.moved){
-      const x = dragState.el.offsetLeft;
-      const y = dragState.el.offsetTop;
-      if(dragState.type==='incoming'){
-        if(dragState.id){
-          api(`/admin/api/incoming-blocks/${dragState.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
-        } else {
-          api('/admin/api/incoming-pos',{method:'PATCH',body:JSON.stringify({x,y})}).catch(()=>{});
+/* ═══ Login Screen ═══ */
+function LoginScreen({sbClient,onLogin}){
+  const [email,setEmail]=useState('');
+  const [password,setPassword]=useState('');
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(false);
+  const submit=async e=>{
+    e.preventDefault();setErr('');setLoading(true);
+    try{
+      const{data,error}=await sbClient.auth.signInWithPassword({email,password});
+      if(error){
+        if(error.message&&error.message.includes('Invalid login')){
+          const{data:su,error:se}=await sbClient.auth.signUp({email,password});
+          if(se)throw se;
+          if(su?.user){onLogin(su.user);return}
         }
-      } else if(dragState.type==='client-token' && dragState.id){
-        api(`/admin/api/tokens/${dragState.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
-      } else if(dragState.id){
-        api(`/admin/api/endpoints/${dragState.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+        throw error;
       }
-    } else if(dragState.type==='endpoint' && dragState.id){
-      selectEndpoint(parseInt(dragState.id));
-    }
-    dragState = null;
-    setTimeout(()=>{ isDragging=false }, 50);
-  }
-  if(wireDrawing){
-    const tw = document.getElementById('temp-wire');
-    if(tw) tw.remove();
-    const tgt = document.elementFromPoint(e.clientX, e.clientY);
-    const port = tgt?.closest('.port.input');
-    if(port){
-      const node = port.closest('.node');
-      const epId = node?.dataset.id;
-      if(epId) toggleConn(parseInt(epId), true);
-    }
-    wireDrawing = null;
-  }
-});
-
-function onPortDown(e){
-  e.preventDefault();
-  e.stopPropagation();
-  const port = e.currentTarget;
-  const cr = canvasEl.getBoundingClientRect();
-  const pr = port.getBoundingClientRect();
-  wireDrawing = {
-    x1: pr.left - cr.left + pr.width/2,
-    y1: pr.top  - cr.top  + pr.height/2,
+      if(data?.user)onLogin(data.user);
+    }catch(ex){setErr(ex.message||'Anmeldung fehlgeschlagen')}
+    finally{setLoading(false)}
   };
-  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-  path.id = 'temp-wire';
-  path.setAttribute('class','wire temp');
-  wireSvg.appendChild(path);
+  return <div className="login-wrap"><form className="login-box" onSubmit={submit}>
+    <div className="logo-hpe">HPE</div>
+    <div className="logo-sub">LLM Load Balancer &middot; Admin</div>
+    <div className="field"><label>E-Mail</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Admin@hpe.com" required autoFocus/></div>
+    <div className="field"><label>Passwort</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Passwort" required/></div>
+    <button type="submit" className="btn-login" disabled={loading}>{loading?'Anmelden \u2026':'Anmelden'}</button>
+    {err&&<div className="err-msg">{err}</div>}
+  </form></div>;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  API Actions                                                                */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-function isEditingForm(){
-  const ae = document.activeElement;
-  if(!ae) return false;
-  return (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
-}
-function markFormEdited(){ lastFormEditAt = Date.now(); }
-function hasRecentFormEdit(){ return (Date.now() - lastFormEditAt) < 4000; }
-
-async function loadState(auto){
-  if(isDragging) return;
-  try{
-    S.state = await api('/admin/api/state');
-    try{ S.fullTokens = await api('/admin/api/tokens'); }catch(e){ S.fullTokens = []; }
-    setStatus('Verbunden', true);
-    retryCount = 0;
-    if(auto && (isEditingForm() || hasRecentFormEdit())){
-      renderLiveStats();
-    } else {
-      renderAll(auto && S.selected);
-    }
-  } catch(err){
-    retryCount++;
-    setStatus('Fehler: '+err.message, false);
-    if(auto && retryCount >= 3){
-      toast('Verbindung verloren \u2013 Retry #'+retryCount, 'warning', 2000);
-    }
-  }
+/* ═══ Toasts ═══ */
+function Toasts({items,onRemove}){
+  return <div className="toast-wrap">{items.map(t=><div key={t.id} className={`toast ${t.kind}`}>
+    <span className="t-icon">{TOAST_ICONS[t.kind]||''}</span>
+    <span style={{flex:1,lineHeight:1.4}}>{t.msg}</span>
+    <span className="t-close" onClick={()=>onRemove(t.id)}>{'\u2715'}</span>
+  </div>)}</div>;
 }
 
-async function setRoutingMode(mode){
-  try{
-    await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({routing_mode:mode})});
-    toast('Routing-Modus: '+(mode==='priority'?'Priorit\u00e4t':'Prozentual'), 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
+/* ═══ Confirm Modal ═══ */
+function ConfirmModal({show,title,message,btnText,onConfirm,onCancel}){
+  if(!show)return null;
+  return <div className="modal-ov" onClick={onCancel}><div className="modal-box" onClick={e=>e.stopPropagation()}>
+    <h3>{title||'Best\u00e4tigung'}</h3>
+    <p>{message||'Sind Sie sicher?'}</p>
+    <div className="m-act">
+      <button className="sb-btn" onClick={onCancel}>Abbrechen</button>
+      <button className="sb-btn danger" onClick={onConfirm}>{btnText||'Best\u00e4tigen'}</button>
+    </div>
+  </div></div>;
 }
 
-async function setPriorityInput(tokenIdRaw){
-  const tokenId = parseInt(tokenIdRaw, 10) || 0;
-  try{
-    await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({priority_input_token_id:tokenId})});
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
+/* ═══ Shortcuts Overlay ═══ */
+function ShortcutsOverlay({show,onClose}){
+  if(!show)return null;
+  return <div className="sc-ov" onClick={onClose}><div className="sc-panel" onClick={e=>e.stopPropagation()}>
+    <h3>Tastenk\u00fcrzel <button className="x-btn" onClick={onClose}>{'\u2715'}</button></h3>
+    {[['Aktualisieren','R'],['Tastenk\u00fcrzel','?'],['Auswahl aufheben','Esc'],['Token suchen','/'],['Canvas verschieben','Drag'],['Zoom','Scrollrad']].map(([d,k])=>
+      <div key={k} className="sc-row"><span className="desc">{d}</span><kbd>{k}</kbd></div>)}
+  </div></div>;
 }
 
-async function resetStats(){
-  const ok = await showConfirm('Stats zur\u00fccksetzen', 'Alle Statistiken werden unwiderruflich zur\u00fcckgesetzt.', 'Zur\u00fccksetzen');
-  if(!ok) return;
-  showLoading();
-  try{
-    await api('/admin/api/reset-stats',{method:'POST'});
-    toast('Statistiken zur\u00fcckgesetzt', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
+/* ═══ Collapsible Section ═══ */
+function Section({id,title,collapsed,onToggle,children}){
+  const shut=!!collapsed[id];
+  return <div className="sb-sec">
+    <h3 onClick={()=>onToggle(id)}>{title} <span className={`chev ${shut?'shut':''}`}>{'\u25be'}</span></h3>
+    <div className={`sec-body ${shut?'shut':''}`}>{children}</div>
+  </div>;
 }
 
-async function createEndpoint(){
-  const p = {
-    name: $('newName').value.trim(),
-    base_url: $('newUrl').value.trim(),
-    api_key: $('newKey').value.trim(),
-    token_quota_percent: parseFloat($('newQuota').value)||0,
-    priority_order: parseInt($('newPriority').value)||10,
-    max_concurrent: parseInt($('newMaxC').value)||0,
-    timeout_seconds: parseFloat($('newTimeout').value)||120,
-    verify_tls: $('newTls').value==='1',
-    connected: $('newConn').value==='1',
-    pos_x: 420,
-    pos_y: 80 + (S.state?S.state.endpoints.length:0) * 160,
+/* ═══ Endpoint Detail ═══ */
+function EndpointDetail({ep,totalTok,onSave,onDelete,onToggle,toast}){
+  const [name,setName]=useState(ep.name);
+  const [url,setUrl]=useState(ep.base_url);
+  const [key,setKey]=useState('');
+  const [quota,setQuota]=useState(ep.token_quota_percent);
+  const [prio,setPrio]=useState(ep.priority_order);
+  const [maxC,setMaxC]=useState(ep.max_concurrent);
+  const [tout,setTout]=useState(ep.timeout_seconds);
+  const [tls,setTls]=useState(ep.verify_tls);
+  const [enabled,setEnabled]=useState(ep.enabled);
+  const [conn,setConn]=useState(ep.connected);
+  useEffect(()=>{setName(ep.name);setUrl(ep.base_url);setKey('');setQuota(ep.token_quota_percent);
+    setPrio(ep.priority_order);setMaxC(ep.max_concurrent);setTout(ep.timeout_seconds);
+    setTls(ep.verify_tls);setEnabled(ep.enabled);setConn(ep.connected)},[ep.id]);
+  const actualPct=totalTok>0?((ep.completion_tokens_total||0)/totalTok*100).toFixed(1):'0.0';
+  const save=()=>{
+    const data={name:name.trim(),base_url:url.trim(),token_quota_percent:parseFloat(quota)||0,
+      priority_order:parseInt(prio)||10,max_concurrent:parseInt(maxC)||0,
+      timeout_seconds:parseFloat(tout)||120,verify_tls:tls,enabled,connected:conn};
+    if(key.trim())data.api_key=key.trim();
+    onSave(ep.id,data);
   };
-  if(!p.name){ toast('Name ist Pflicht','warning'); return; }
-  if(!p.base_url){ toast('Base URL ist Pflicht','warning'); return; }
-  showLoading();
-  try{
-    await api('/admin/api/endpoints',{method:'POST',body:JSON.stringify(p)});
-    $('newName').value=''; $('newUrl').value=''; $('newKey').value='';
-    toast('Endpoint "'+p.name+'" erstellt', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
+  return <>
+    <div className="sb-row"><div className="sb-field"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)}/></div></div>
+    <div className="sb-row"><div className="sb-field"><label>Base URL</label><input value={url} onChange={e=>setUrl(e.target.value)}/></div></div>
+    <div className="sb-row"><div className="sb-field"><label>API Key (leer=unver\u00e4ndert)</label><input type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder="(unver\u00e4ndert)"/></div></div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Quota %</label><input type="number" min="0" max="100" value={quota} onChange={e=>setQuota(e.target.value)}/></div>
+      <div className="sb-field"><label>Ist %</label><input value={actualPct} disabled style={{opacity:.6}}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Priorit\u00e4t</label><input type="number" min="1" max="100" value={prio} onChange={e=>setPrio(e.target.value)}/></div>
+      <div className="sb-field"><label>Max Parallel</label><input type="number" min="0" value={maxC} onChange={e=>setMaxC(e.target.value)}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Timeout (s)</label><input type="number" min="5" value={tout} onChange={e=>setTout(e.target.value)}/></div>
+      <div className="sb-field"><label>TLS pr\u00fcfen</label><select value={tls?'1':'0'} onChange={e=>setTls(e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Aktiviert</label><select value={enabled?'1':'0'} onChange={e=>setEnabled(e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+      <div className="sb-field"><label>Verbunden</label><select value={conn?'1':'0'} onChange={e=>setConn(e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+    </div>
+    <div style={{fontSize:11,color:'var(--muted)',margin:'6px 0'}}>
+      Key: {ep.api_key_preview} | Req: {ep.total_requests} | OK: {ep.total_success} | P-Tok: {(ep.prompt_tokens_total||0).toLocaleString()} | C-Tok: {(ep.completion_tokens_total||0).toLocaleString()}
+    </div>
+    <div className="sb-row" style={{gap:6}}>
+      <button className="sb-btn primary" onClick={save}>Speichern</button>
+      <button className={`sb-btn ${ep.connected?'danger':'green'}`} onClick={()=>onToggle(ep.id,!ep.connected)}>{ep.connected?'Trennen':'Verbinden'}</button>
+      <button className="sb-btn danger" onClick={()=>onDelete(ep.id)}>L\u00f6schen</button>
+    </div>
+  </>;
 }
 
-async function saveEndpoint(id){
-  const p = {
-    name: $('dName').value.trim(),
-    base_url: $('dUrl').value.trim(),
-    token_quota_percent: parseFloat($('dQuota').value)||0,
-    priority_order: parseInt($('dPrio').value)||10,
-    max_concurrent: parseInt($('dMaxC').value)||0,
-    timeout_seconds: parseFloat($('dTimeout').value)||120,
-    verify_tls: $('dTls').value==='1',
-    enabled: $('dEnabled').value==='1',
-    connected: $('dConnected').value==='1',
+/* ═══ Add Endpoint Form ═══ */
+function AddEndpointForm({onSubmit,epCount}){
+  const [name,setName]=useState('');const [url,setUrl]=useState('');const [key,setKey]=useState('');
+  const [quota,setQuota]=useState(0);const [prio,setPrio]=useState(10);
+  const [maxC,setMaxC]=useState(0);const [tout,setTout]=useState(120);
+  const [tls,setTls]=useState(true);const [conn,setConn]=useState(true);
+  const submit=()=>{
+    if(!name.trim()||!url.trim())return;
+    onSubmit({name:name.trim(),base_url:url.trim(),api_key:key.trim(),token_quota_percent:parseFloat(quota)||0,
+      priority_order:parseInt(prio)||10,max_concurrent:parseInt(maxC)||0,timeout_seconds:parseFloat(tout)||120,
+      verify_tls:tls,connected:conn,pos_x:420,pos_y:80+(epCount||0)*160});
+    setName('');setUrl('');setKey('');
   };
-  const k = $('dKey').value.trim();
-  if(k) p.api_key = k;
-  showLoading();
-  try{
-    await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify(p)});
-    toast('Endpoint gespeichert', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
+  return <>
+    <div className="sb-row"><div className="sb-field"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="vllm-eu-1"/></div></div>
+    <div className="sb-row"><div className="sb-field"><label>Base URL</label><input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://host:8000/v1"/></div></div>
+    <div className="sb-row"><div className="sb-field"><label>API Key</label><input type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder="sk-..."/></div></div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Quota %</label><input type="number" min="0" max="100" value={quota} onChange={e=>setQuota(e.target.value)}/></div>
+      <div className="sb-field"><label>Priorit\u00e4t</label><input type="number" min="1" max="100" value={prio} onChange={e=>setPrio(e.target.value)}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Max Parallel</label><input type="number" min="0" value={maxC} onChange={e=>setMaxC(e.target.value)}/></div>
+      <div className="sb-field"><label>Timeout (s)</label><input type="number" min="5" value={tout} onChange={e=>setTout(e.target.value)}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-field"><label>TLS pr\u00fcfen</label><select value={tls?'1':'0'} onChange={e=>setTls(e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+      <div className="sb-field"><label>Sofort verbinden</label><select value={conn?'1':'0'} onChange={e=>setConn(e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+    </div>
+    <div className="sb-row" style={{marginTop:6}}><button className="sb-btn primary" onClick={submit}>Endpoint anlegen</button></div>
+  </>;
 }
 
-async function toggleConn(id, conn){
-  try{
-    await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify({connected:conn})});
-    toast(conn?'Endpoint verbunden':'Endpoint getrennt', 'info');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-}
-
-async function deleteEndpoint(id){
-  const ep = S.state?.endpoints?.find(e=>e.id===id);
-  const name = ep ? ep.name : '#'+id;
-  const ok = await showConfirm('Endpoint l\u00f6schen', 'Endpoint "'+name+'" wirklich l\u00f6schen? Dies kann nicht r\u00fcckg\u00e4ngig gemacht werden.', 'L\u00f6schen');
-  if(!ok) return;
-  showLoading();
-  try{
-    await api(`/admin/api/endpoints/${id}`,{method:'DELETE'});
-    if(S.selected===id) S.selected=null;
-    toast('Endpoint "'+name+'" gel\u00f6scht', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
-}
-
-/* ═══ Incoming Block Management ═══ */
-function renderIncomingBlockList(){
-  const el = $('incomingBlockList');
-  const sel = $('newTokenIncoming');
-  if(!el || !S.state) return;
-  const blocks = getIncomingBlocks();
-  const tokenCounts = {};
-  (S.fullTokens||[]).forEach(t => {
-    const bid = parseInt(t.incoming_block_id||'0',10);
-    tokenCounts[bid] = (tokenCounts[bid]||0) + 1;
-  });
-  if(blocks.length===0){
-    el.innerHTML = '<p style="font-size:11px;color:var(--muted)">Keine Incoming-Bl\u00f6cke vorhanden.</p>';
-  } else {
-    el.innerHTML = blocks.map(b => `
-      <div style="margin-bottom:8px;padding:8px;background:var(--card);border-radius:6px;border:1px solid var(--border)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <input id="incName${b.id}" value="${esc(b.name)}" style="flex:1;font:12px/1.4 inherit;padding:4px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"/>
-          <button class="sb-btn" style="font-size:10px;padding:2px 6px" onclick="saveIncomingBlock(${b.id})">\U0001f4be</button>
-          <button class="sb-btn danger" style="font-size:10px;padding:2px 6px" onclick="deleteIncomingBlock(${b.id})" title="L\u00f6schen">\u2715</button>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">Tokens: ${tokenCounts[b.id]||0}</div>
+/* ═══ Incoming Block List ═══ */
+function IncomingBlockList({blocks,tokens,onCreate,onSave,onDelete}){
+  const [newName,setNewName]=useState('');
+  const [editNames,setEditNames]=useState({});
+  const tokenCounts=useMemo(()=>{const m={};(tokens||[]).forEach(t=>{const bid=t.incoming_block_id||0;m[bid]=(m[bid]||0)+1});return m},[tokens]);
+  return <>
+    {blocks.map(b=><div key={b.id} style={{marginBottom:8,padding:8,background:'var(--bg)',borderRadius:6,border:'1px solid var(--border-light)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <input value={editNames[b.id]!=null?editNames[b.id]:b.name} onChange={e=>setEditNames(p=>({...p,[b.id]:e.target.value}))}
+          style={{flex:1,font:'12px/1.4 inherit',padding:'4px 6px',borderRadius:4,border:'1px solid var(--border)',background:'#FFF',color:'var(--text)'}}/>
+        <button className="sb-btn" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>{const n=(editNames[b.id]!=null?editNames[b.id]:b.name).trim();if(n)onSave(b.id,n)}}>{'\U0001f4be'}</button>
+        <button className="sb-btn danger" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>onDelete(b.id)}>{'\u2715'}</button>
       </div>
-    `).join('');
-  }
-  if(sel){
-    const current = sel.value;
-    sel.innerHTML = blocks.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
-    if(blocks.some(b => String(b.id) === String(current))) sel.value = current;
-    else if(blocks[0]) sel.value = String(blocks[0].id);
-  }
+      <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Tokens: {tokenCounts[b.id]||0}</div>
+    </div>)}
+    <div style={{marginTop:10,borderTop:'1px solid var(--border-light)',paddingTop:10}}>
+      <div className="sb-row"><div className="sb-field"><label>Block-Name</label><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="z.B. Setup A"/></div></div>
+      <div className="sb-row" style={{marginTop:4}}><button className="sb-btn primary" onClick={()=>{const n=newName.trim()||`Incoming ${blocks.length+1}`;onCreate(n,240+blocks.length*36,220+blocks.length*84);setNewName('')}}>Block erstellen</button></div>
+    </div>
+  </>;
 }
 
-async function createIncomingBlock(){
-  if(!S.state) return;
-  const blocks = getIncomingBlocks();
-  const idx = blocks.length + 1;
-  const name = $('newIncomingName').value.trim() || `Incoming ${idx}`;
-  const pos_x = 240 + ((idx - 1) * 36);
-  const pos_y = 220 + ((idx - 1) * 84);
-  showLoading();
-  try{
-    await api('/admin/api/incoming-blocks',{method:'POST',body:JSON.stringify({name,pos_x,pos_y})});
-    $('newIncomingName').value = '';
-    toast('Incoming-Block "'+name+'" erstellt', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
+/* ═══ Client Token List ═══ */
+function ClientTokenList({tokens,endpoints,incomingBlocks,onSaveRoute,onDelete,toast}){
+  if(!tokens||tokens.length===0)return <p style={{fontSize:11,color:'var(--muted)'}}>Keine Client-Tokens vorhanden.</p>;
+  return <>{tokens.map(t=><ClientTokenItem key={t.id} t={t} endpoints={endpoints} incomingBlocks={incomingBlocks} onSaveRoute={onSaveRoute} onDelete={onDelete} toast={toast}/>)}</>;
 }
 
-async function saveIncomingBlock(id){
-  const input = $(`incName${id}`);
-  const name = (input?.value||'').trim();
-  if(!name){ toast('Name ist Pflicht','warning'); return; }
-  try{
-    await api(`/admin/api/incoming-blocks/${id}`,{method:'PATCH',body:JSON.stringify({name})});
-    toast('Block gespeichert', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
+function ClientTokenItem({t,endpoints,incomingBlocks,onSaveRoute,onDelete,toast}){
+  const [ibid,setIbid]=useState(String(t.incoming_block_id||''));
+  const [epid,setEpid]=useState(String(t.preferred_endpoint_id||''));
+  const [prio,setPrio]=useState(t.request_priority||0);
+  const [minPct,setMinPct]=useState(t.min_traffic_percent||0);
+  const copy=()=>{navigator.clipboard.writeText(t.token).then(()=>toast('Token kopiert','success')).catch(()=>toast('Kopieren fehlgeschlagen','error'))};
+  const save=()=>onSaveRoute(t.id,{incoming_block_id:ibid?parseInt(ibid):null,preferred_endpoint_id:epid?parseInt(epid):null,request_priority:parseInt(prio)||0,min_traffic_percent:parseFloat(minPct)||0});
+  return <div style={{marginBottom:8,padding:10,background:'var(--bg)',borderRadius:6,border:'1px solid var(--border-light)'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+      <span style={{fontSize:12,fontWeight:600}}>{t.name}</span>
+      <button className="sb-btn danger" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>onDelete(t.id)}>{'\u2715'}</button>
+    </div>
+    <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:8}}>
+      <input readOnly value={t.token} style={{flex:1,font:'11px/1.4 monospace',padding:'4px 6px',borderRadius:4,border:'1px solid var(--border)',background:'#FFF',color:'var(--accent)',cursor:'text'}} onClick={e=>e.target.select()}/>
+      <button className="sb-btn" style={{fontSize:10,padding:'3px 8px'}} onClick={copy}>{'\U0001f4cb'}</button>
+    </div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Inc. Block</label><select value={ibid} onChange={e=>setIbid(e.target.value)}>{incomingBlocks.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-field"><label>Ziel-Endpoint</label><select value={epid} onChange={e=>setEpid(e.target.value)}><option value="">Auto</option>{endpoints.map(ep=><option key={ep.id} value={ep.id}>{ep.name}</option>)}</select></div>
+      <div className="sb-field" style={{maxWidth:90}}><label>Prio</label><input type="number" min="0" value={prio} onChange={e=>setPrio(e.target.value)}/></div>
+      <div className="sb-field" style={{maxWidth:90}}><label>Min %</label><input type="number" min="0" max="100" step="0.1" value={minPct} onChange={e=>setMinPct(e.target.value)}/></div>
+    </div>
+    <div style={{textAlign:'right',marginTop:2}}><button className="sb-btn" style={{fontSize:10,padding:'3px 8px'}} onClick={save}>Route speichern</button></div>
+  </div>;
 }
 
-async function deleteIncomingBlock(id){
-  const ok = await showConfirm('Incoming-Block l\u00f6schen', 'Wirklich l\u00f6schen? Zugeordnete Tokens werden auf den n\u00e4chsten Block verschoben.', 'L\u00f6schen');
-  if(!ok) return;
-  showLoading();
-  try{
-    await api(`/admin/api/incoming-blocks/${id}`,{method:'DELETE'});
-    toast('Incoming-Block gel\u00f6scht', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
+/* ═══ Add Token Form ═══ */
+function AddTokenForm({incomingBlocks,onSubmit}){
+  const [name,setName]=useState('');const [token,setToken]=useState('');const [ibid,setIbid]=useState(incomingBlocks[0]?.id||'');
+  const submit=()=>{if(!name.trim())return;onSubmit(name.trim(),token.trim(),ibid?parseInt(ibid):null);setName('');setToken('')};
+  return <>
+    <div className="sb-row"><div className="sb-field"><label>Token-Name</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="z.B. load-tester-1"/></div></div>
+    <div className="sb-row"><div className="sb-field"><label>Token (leer=auto)</label><input value={token} onChange={e=>setToken(e.target.value)} placeholder="auto-generiert"/></div></div>
+    <div className="sb-row"><div className="sb-field"><label>Incoming-Block</label><select value={ibid} onChange={e=>setIbid(e.target.value)}>{incomingBlocks.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></div></div>
+    <div className="sb-row" style={{marginTop:4}}><button className="sb-btn primary" onClick={submit}>Token erstellen</button></div>
+  </>;
 }
 
-/* ═══ Client Token Management ═══ */
-function renderTokenList(){
-  const el = $('tokenList');
-  if(!el || !S.state) return;
-  const tokens = S.fullTokens || [];
-  const endpoints = S.state.endpoints || [];
-  const incomingBlocks = getIncomingBlocks();
-  // Show/hide search
-  const searchWrap = $('tokenSearchWrap');
-  if(searchWrap) searchWrap.style.display = tokens.length > 3 ? '' : 'none';
-  // Filter
-  const q = ($('tokenSearch')?.value||'').toLowerCase();
-  const filtered = q ? tokens.filter(t => t.name.toLowerCase().includes(q) || t.token.toLowerCase().includes(q)) : tokens;
+/* ═══ Admin App ═══ */
+function AdminApp({user,sbClient,onLogout}){
+  const [lbState,setLbState]=useState(null);
+  const [fullTokens,setFullTokens]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [pan,setPan]=useState({x:0,y:0});
+  const [zoom,setZoom]=useState(1);
+  const [connected,setConnected]=useState(false);
+  const [toasts,setToasts]=useState([]);
+  const [collapsed,setCollapsed]=useState(()=>{try{return JSON.parse(localStorage.getItem('lb_collapsed')||'{}')}catch{return{}}});
+  const [modal,setModal]=useState(null);
+  const [showShortcuts,setShowShortcuts]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [adminToken,setAdminToken]=useState(()=>localStorage.getItem('lb_admin_token')||'');
+  const [tokenSearch,setTokenSearch]=useState('');
+  const [tempWire,setTempWire]=useState(null);
+  const [tick,setTick]=useState(Date.now());
 
-  if(tokens.length === 0){
-    el.innerHTML = '<p style="font-size:11px;color:var(--muted)">Keine Client-Tokens. API ist offen (sofern LB_CLIENT_TOKENS nicht gesetzt).</p>';
-    return;
-  }
-  if(filtered.length === 0){
-    el.innerHTML = '<p style="font-size:11px;color:var(--muted)">Keine Tokens gefunden f\u00fcr "'+esc(q)+'".</p>';
-    return;
-  }
-  el.innerHTML = filtered.map(t => `
-    <div style="margin-bottom:8px;padding:8px;background:var(--card);border-radius:6px;border:1px solid var(--border)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:12px;font-weight:600;color:var(--text)">${esc(t.name)}</span>
-        <button class="sb-btn danger" style="font-size:10px;padding:2px 6px" onclick="deleteClientToken(${t.id})" title="L\u00f6schen">\u2715</button>
-      </div>
-      <div style="display:flex;gap:4px;align-items:center">
-        <input readonly value="${esc(t.token)}" style="flex:1;font:11px/1.4 monospace;padding:4px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--accent);cursor:text" onclick="this.select()"/>
-        <button class="sb-btn" style="font-size:10px;padding:3px 8px" onclick="copyTok('${esc(t.token)}',this)" title="Kopieren">\U0001f4cb</button>
-      </div>
-      <div class="sb-row" style="margin-top:6px">
-        <div class="sb-field">
-          <label>Incoming-Block</label>
-          <select id="tokIncoming${t.id}">
-            ${incomingBlocks.map(ib => `<option value="${ib.id}"${String(t.incoming_block_id||'')===String(ib.id)?' selected':''}>${esc(ib.name)}</option>`).join('')}
-          </select>
+  const tokenRef=useRef(adminToken);
+  const panRef=useRef(null);
+  const dragRef=useRef(null);
+  const wireRef=useRef(null);
+  const canvasRef=useRef(null);
+  const modalResolveRef=useRef(null);
+  const panStateRef=useRef(pan);
+  const zoomRef=useRef(zoom);
+
+  useEffect(()=>{tokenRef.current=adminToken;localStorage.setItem('lb_admin_token',adminToken)},[adminToken]);
+  useEffect(()=>{panStateRef.current=pan},[pan]);
+  useEffect(()=>{zoomRef.current=zoom},[zoom]);
+
+  const api=useMemo(()=>makeApi(tokenRef),[]);
+
+  const toast=useCallback((msg,kind='info')=>{
+    const id=uid();setToasts(p=>[{id,msg,kind},...p].slice(0,6));
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),4000);
+  },[]);
+  const removeToast=useCallback(id=>setToasts(p=>p.filter(t=>t.id!==id)),[]);
+
+  const confirm=useCallback((title,message,btnText)=>new Promise(resolve=>{
+    modalResolveRef.current=resolve;setModal({title,message,btnText});
+  }),[]);
+  const onModalConfirm=useCallback(()=>{setModal(null);modalResolveRef.current?.(true)},[]);
+  const onModalCancel=useCallback(()=>{setModal(null);modalResolveRef.current?.(false)},[]);
+
+  const togSec=useCallback(id=>{setCollapsed(p=>{const n={...p,[id]:!p[id]};localStorage.setItem('lb_collapsed',JSON.stringify(n));return n})},[]);
+
+  /* Load state */
+  const loadState=useCallback(async(auto=false)=>{
+    try{
+      const st=await api('/admin/api/state');setLbState(st);
+      try{setFullTokens(await api('/admin/api/tokens'))}catch{setFullTokens([])}
+      setConnected(true);
+    }catch(err){setConnected(false);if(!auto)toast('Fehler: '+err.message,'error')}
+  },[api,toast]);
+
+  useEffect(()=>{loadState();const iv=setInterval(()=>loadState(true),3000);return()=>clearInterval(iv)},[loadState]);
+  useEffect(()=>{const iv=setInterval(()=>setTick(Date.now()),500);return()=>clearInterval(iv)},[]);
+
+  /* Keyboard shortcuts */
+  useEffect(()=>{
+    const h=e=>{
+      const tag=document.activeElement?.tagName;
+      if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return;
+      const k=e.key.toLowerCase();
+      if(k==='r'){e.preventDefault();loadState();}
+      else if(k==='?'){e.preventDefault();setShowShortcuts(p=>!p);}
+      else if(k==='escape'){setShowShortcuts(false);setSelected(null);}
+      else if(k==='/'){e.preventDefault();document.querySelector('.search-wrap input')?.focus();}
+    };
+    window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);
+  },[loadState]);
+
+  /* Canvas interaction */
+  useEffect(()=>{
+    const move=e=>{
+      if(panRef.current){
+        const dx=e.clientX-panRef.current.sx,dy=e.clientY-panRef.current.sy;
+        setPan({x:panRef.current.px+dx,y:panRef.current.py+dy});
+      }
+      if(dragRef.current){
+        const z=zoomRef.current;
+        const dx=(e.clientX-dragRef.current.sx)/z,dy=(e.clientY-dragRef.current.sy)/z;
+        dragRef.current.moved=Math.abs(dx)>2||Math.abs(dy)>2;
+        dragRef.current.cx=dragRef.current.ox+dx;dragRef.current.cy=dragRef.current.oy+dy;
+        dragRef.current.el.style.left=dragRef.current.cx+'px';
+        dragRef.current.el.style.top=dragRef.current.cy+'px';
+        setTick(Date.now());
+      }
+      if(wireRef.current){
+        const cr=canvasRef.current?.getBoundingClientRect();if(!cr)return;
+        const p=panStateRef.current,z=zoomRef.current;
+        const mx=(e.clientX-cr.left-p.x)/z,my=(e.clientY-cr.top-p.y)/z;
+        setTempWire({x1:wireRef.current.x1,y1:wireRef.current.y1,x2:mx,y2:my});
+      }
+    };
+    const up=e=>{
+      if(panRef.current)panRef.current=null;
+      if(dragRef.current){
+        const d=dragRef.current;
+        if(d.moved){
+          const x=d.cx,y=d.cy;
+          if(d.type==='incoming'&&d.id)api(`/admin/api/incoming-blocks/${d.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+          else if(d.type==='client-token'&&d.id)api(`/admin/api/tokens/${d.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+          else if(d.type==='endpoint'&&d.id)api(`/admin/api/endpoints/${d.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+        }else if(d.type==='endpoint'&&d.id){setSelected(prev=>prev===d.id?null:d.id);}
+        dragRef.current=null;
+      }
+      if(wireRef.current){
+        const tgt=document.elementFromPoint(e.clientX,e.clientY);
+        const port=tgt?.closest('.port-in');
+        if(port){const node=port.closest('.node');const epId=node?.dataset?.eid;if(epId)toggleConn(parseInt(epId),true)}
+        wireRef.current=null;setTempWire(null);
+      }
+    };
+    document.addEventListener('mousemove',move);document.addEventListener('mouseup',up);
+    return()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up)};
+  },[api]);
+
+  const handleCanvasDown=useCallback(e=>{
+    if(e.target.closest('.node')||e.target.closest('.port')||e.target.closest('.zoom-ctrl')||e.target.closest('.zoom-info'))return;
+    panRef.current={sx:e.clientX,sy:e.clientY,px:panStateRef.current.x,py:panStateRef.current.y};
+  },[]);
+
+  const handleNodeDown=useCallback((e,type,id)=>{
+    if(e.target.closest('.port'))return;
+    e.stopPropagation();e.preventDefault();
+    const el=e.currentTarget;
+    dragRef.current={el,type,id:parseInt(id),sx:e.clientX,sy:e.clientY,ox:el.offsetLeft,oy:el.offsetTop,cx:el.offsetLeft,cy:el.offsetTop,moved:false};
+  },[]);
+
+  const handlePortDown=useCallback((e,block)=>{
+    e.stopPropagation();e.preventDefault();
+    wireRef.current={x1:block.pos_x+NODE_W.incoming,y1:block.pos_y+NODE_H.incoming/2};
+  },[]);
+
+  const handleWheel=useCallback(e=>{
+    e.preventDefault();
+    const cr=canvasRef.current?.getBoundingClientRect();if(!cr)return;
+    const mx=e.clientX-cr.left,my=e.clientY-cr.top;
+    const delta=e.deltaY>0?-0.08:0.08;
+    setZoom(z=>{
+      const nz=Math.min(2,Math.max(0.3,z+delta));
+      const ratio=nz/z;
+      setPan(p=>({x:mx-(mx-p.x)*ratio,y:my-(my-p.y)*ratio}));
+      return nz;
+    });
+  },[]);
+
+  const resetView=useCallback(()=>{setPan({x:0,y:0});setZoom(1)},[]);
+
+  /* API actions */
+  const toggleConn=useCallback(async(id,conn)=>{
+    try{await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify({connected:conn})});toast(conn?'Endpoint verbunden':'Endpoint getrennt','info');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const createEndpoint=useCallback(async(data)=>{
+    setLoading(true);
+    try{await api('/admin/api/endpoints',{method:'POST',body:JSON.stringify(data)});toast(`Endpoint "${data.name}" erstellt`,'success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const saveEndpoint=useCallback(async(id,data)=>{
+    setLoading(true);
+    try{await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify(data)});toast('Endpoint gespeichert','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const deleteEndpoint=useCallback(async(id)=>{
+    const ep=lbState?.endpoints?.find(e=>e.id===id);
+    const ok=await confirm('Endpoint l\u00f6schen',`Endpoint "${ep?.name||id}" l\u00f6schen?`,'L\u00f6schen');
+    if(!ok)return;setLoading(true);
+    try{await api(`/admin/api/endpoints/${id}`,{method:'DELETE'});if(selected===id)setSelected(null);toast('Endpoint gel\u00f6scht','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState,lbState,selected]);
+
+  const setRoutingMode=useCallback(async(mode)=>{
+    try{await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({routing_mode:mode})});toast('Routing: '+(mode==='priority'?'Priorit\u00e4t':'Prozentual'),'success');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const setPriorityInput=useCallback(async(tid)=>{
+    try{await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({priority_input_token_id:parseInt(tid)||0})});loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,loadState]);
+
+  const resetStats=useCallback(async()=>{
+    const ok=await confirm('Stats zur\u00fccksetzen','Alle Statistiken werden zur\u00fcckgesetzt.','Zur\u00fccksetzen');
+    if(!ok)return;setLoading(true);
+    try{await api('/admin/api/reset-stats',{method:'POST'});toast('Stats zur\u00fcckgesetzt','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState]);
+
+  const createIncomingBlock=useCallback(async(name,px,py)=>{
+    setLoading(true);
+    try{await api('/admin/api/incoming-blocks',{method:'POST',body:JSON.stringify({name,pos_x:px||256,pos_y:py||300})});toast(`Block "${name}" erstellt`,'success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const saveIncomingBlock=useCallback(async(id,name)=>{
+    try{await api(`/admin/api/incoming-blocks/${id}`,{method:'PATCH',body:JSON.stringify({name})});toast('Block gespeichert','success');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const deleteIncomingBlock=useCallback(async(id)=>{
+    const ok=await confirm('Block l\u00f6schen','Incoming-Block l\u00f6schen?','L\u00f6schen');
+    if(!ok)return;setLoading(true);
+    try{await api(`/admin/api/incoming-blocks/${id}`,{method:'DELETE'});toast('Block gel\u00f6scht','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState]);
+
+  const createClientToken=useCallback(async(name,token,ibid)=>{
+    setLoading(true);
+    try{await api('/admin/api/tokens',{method:'POST',body:JSON.stringify({name,token:token||null,incoming_block_id:ibid||null})});toast(`Token "${name}" erstellt`,'success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const saveTokenRoute=useCallback(async(tid,patch)=>{
+    try{await api(`/admin/api/tokens/${tid}`,{method:'PATCH',body:JSON.stringify(patch)});toast('Route gespeichert','success');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const deleteClientToken=useCallback(async(tid)=>{
+    const t=(fullTokens||[]).find(x=>x.id===tid);
+    const ok=await confirm('Token l\u00f6schen',`Token "${t?.name||tid}" l\u00f6schen?`,'L\u00f6schen');
+    if(!ok)return;setLoading(true);
+    try{await api(`/admin/api/tokens/${tid}`,{method:'DELETE'});toast('Token gel\u00f6scht','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState,fullTokens]);
+
+  /* Computed */
+  const incomingBlocks=useMemo(()=>{
+    if(lbState?.incoming_blocks?.length)return lbState.incoming_blocks;
+    return[{id:1,name:'Incoming 1',pos_x:256,pos_y:300}];
+  },[lbState]);
+
+  const wires=useMemo(()=>{
+    if(!lbState)return[];const result=[];const eps=lbState.endpoints||[];const cts=lbState.client_tokens||[];
+    cts.forEach(ct=>{
+      const tgt=incomingBlocks.find(b=>b.id===ct.incoming_block_id)||incomingBlocks[0];if(!tgt)return;
+      result.push({x1:(ct.pos_x||80)+NODE_W.token,y1:(ct.pos_y||100)+NODE_H.token/2,x2:tgt.pos_x,y2:tgt.pos_y+NODE_H.incoming/2,type:'token',active:true});
+    });
+    const totalTok=eps.reduce((s,e)=>s+(e.completion_tokens_total||0),0);
+    incomingBlocks.forEach(ib=>{
+      eps.filter(e=>e.connected).forEach(ep=>{
+        const pct=totalTok>0?((ep.completion_tokens_total||0)/totalTok*100).toFixed(0)+'%':'\u2014';
+        result.push({x1:ib.pos_x+NODE_W.incoming,y1:ib.pos_y+NODE_H.incoming/2,x2:ep.pos_x||420,y2:(ep.pos_y||80)+NODE_H.endpoint/2,type:'endpoint',active:(ep.inflight||0)>0,label:pct});
+      });
+    });
+    return result;
+  },[lbState,incomingBlocks,tick]);
+
+  const selectedEp=useMemo(()=>selected?lbState?.endpoints?.find(e=>e.id===selected):null,[lbState,selected]);
+  const totalTok=useMemo(()=>(lbState?.endpoints||[]).reduce((s,e)=>s+(e.completion_tokens_total||0),0),[lbState]);
+  const filteredTokens=useMemo(()=>{
+    const q=tokenSearch.toLowerCase();const list=fullTokens||[];
+    return q?list.filter(t=>t.name.toLowerCase().includes(q)||t.token.toLowerCase().includes(q)):list;
+  },[fullTokens,tokenSearch]);
+
+  /* ═══ RENDER ═══ */
+  return <>
+    {/* Header */}
+    <div className="hdr">
+      <div className="logo">{'\u26a1'} HPE LB Admin <span className="badge">v{lbState?.version||'3'}</span></div>
+      <div className="sep"/>
+      <input type="password" value={adminToken} onChange={e=>setAdminToken(e.target.value)} placeholder="Admin Token\u2026" aria-label="Admin Token"/>
+      <div className="sep"/>
+      <label style={{fontSize:12,color:'var(--muted)'}}>Routing:</label>
+      <select value={lbState?.routing_mode||'percentage'} onChange={e=>setRoutingMode(e.target.value)}>
+        <option value="percentage">Prozentual</option><option value="priority">Priorit&auml;t</option>
+      </select>
+      {lbState?.routing_mode==='priority'&&<>
+        <label style={{fontSize:12,color:'var(--muted)'}}>Prio-Eingang:</label>
+        <select value={String(lbState?.priority_input_token_id||0)} onChange={e=>setPriorityInput(e.target.value)}>
+          <option value="0">(kein)</option>
+          {(lbState?.client_tokens||[]).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </>}
+      <div className="sep"/>
+      <button onClick={()=>loadState()} title="Aktualisieren (R)">{'\u27f3'}</button>
+      <button style={{color:'var(--error)',borderColor:'var(--error)'}} onClick={resetStats}>Stats Reset</button>
+      <div style={{flex:1}}/>
+      <div className={`dot ${connected?'ok':'err'}`} title={connected?'Verbunden':'Getrennt'}/>
+      <span className="status-text">{connected?'Verbunden':'Getrennt'}</span>
+      <span style={{fontSize:10,color:'var(--muted)',padding:'2px 6px',border:'1px solid var(--border)',borderRadius:4,cursor:'pointer'}} onClick={()=>setShowShortcuts(true)}>{'\u2328'} Shortcuts</span>
+      {user&&<div className="user-btn" onClick={onLogout} title="Abmelden">
+        <span>{'\U0001f464'}</span><span style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.email}</span>
+      </div>}
+    </div>
+
+    {/* Main */}
+    <div className="main">
+      {/* Canvas */}
+      <div className={`canvas ${panRef.current?'panning':''}`} ref={canvasRef} onMouseDown={handleCanvasDown} onWheel={handleWheel}>
+        <div className="grid-bg" style={{backgroundPosition:`${pan.x%24}px ${pan.y%24}px`}}/>
+        <div className="world" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,transformOrigin:'0 0'}}>
+          <svg className="wires" width="6000" height="6000">
+            {wires.map((w,i)=><g key={i}>
+              <path d={bezier(w.x1,w.y1,w.x2,w.y2)} className={`wire ${w.active?'active':''} ${w.type==='token'?'wire-token':''}`}/>
+              {w.label&&<text x={(w.x1+w.x2)/2} y={(w.y1+w.y2)/2-10} className="wire-label" textAnchor="middle">{w.label}</text>}
+            </g>)}
+            {tempWire&&<path d={bezier(tempWire.x1,tempWire.y1,tempWire.x2,tempWire.y2)} className="wire wire-temp"/>}
+          </svg>
+
+          {(lbState?.client_tokens||[]).map(ct=><div key={`ct-${ct.id}`} className="node node-token"
+            style={{left:ct.pos_x||80,top:ct.pos_y||100}} onMouseDown={e=>handleNodeDown(e,'client-token',ct.id)}>
+            <div className="node-head"><span className="icon">{'\U0001f511'}</span> {ct.name}</div>
+            <div className="node-body">
+              <div className="node-row"><span>Requests</span><span className="val">{ct.total_requests||0}</span></div>
+              <div className="node-row"><span>Req/s</span><span className="val">{ct.requests_per_second||0}</span></div>
+              <div className="node-row"><span>P-Tok</span><span className="val">{(ct.prompt_tokens_total||0).toLocaleString()}</span></div>
+              <div className="node-row"><span>C-Tok</span><span className="val">{(ct.completion_tokens_total||0).toLocaleString()}</span></div>
+            </div>
+            <div className="port port-out connected" style={{background:'var(--hpe-purple)'}}/>
+          </div>)}
+
+          {incomingBlocks.map(ib=><div key={`ib-${ib.id}`} className="node node-incoming"
+            style={{left:ib.pos_x,top:ib.pos_y}} onMouseDown={e=>handleNodeDown(e,'incoming',ib.id)}>
+            <div className="node-head"><span className="icon">{'\u26a1'}</span> {ib.name}</div>
+            <div className="node-body">
+              <div className="node-row"><span>In-Flight</span><span className="val">{lbState?.stats?.total_inflight||0}</span></div>
+              <div className="node-row"><span>Req/s</span><span className="val">{lbState?.stats?.requests_per_second||0}</span></div>
+              <div className="node-row"><span>Token/s</span><span className="val">{lbState?.stats?.tokens_per_second||0}</span></div>
+            </div>
+            <div className="port port-in connected" style={{pointerEvents:'none'}}/>
+            <div className="port port-out" title="Ziehen zum Verbinden" onMouseDown={e=>handlePortDown(e,ib)}/>
+          </div>)}
+
+          {(lbState?.endpoints||[]).map(ep=>{
+            const actualPct=totalTok>0?((ep.completion_tokens_total||0)/totalTok*100).toFixed(1):'0.0';
+            const ok=ep.enabled&&(ep.cooldown_remaining_s||0)<=0;
+            const tps=lbState?.stats?.tokens_per_second>0&&totalTok>0?((ep.completion_tokens_total||0)/totalTok*lbState.stats.tokens_per_second).toFixed(1):'0';
+            const successRate=ep.total_requests>0?((ep.total_success/ep.total_requests)*100).toFixed(0)+'%':'\u2014';
+            return <div key={`ep-${ep.id}`} className={`node node-endpoint ${selected===ep.id?'selected':''}`}
+              data-eid={ep.id} style={{left:ep.pos_x||420,top:ep.pos_y||80}} onMouseDown={e=>handleNodeDown(e,'endpoint',ep.id)}>
+              <div className="node-head">
+                <span className="icon">{ep.connected?'\U0001f7e2':'\u26aa'}</span> {ep.name}
+                {!ep.enabled?<span className="pill pill-off">AUS</span>
+                  :ep.cooldown_remaining_s>0?<span className="pill pill-warn">COOLDOWN</span>
+                  :<span className="pill pill-ok">OK</span>}
+              </div>
+              <div className="node-body">
+                <div className="node-row"><span>Quota</span><span className="val">{ep.token_quota_percent}%</span></div>
+                <div className="node-row"><span>Ist</span><span className="val">{actualPct}%</span></div>
+                <div className="node-bar"><div className="bar-fill" style={{width:`${Math.min(100,actualPct)}%`,background:ok?'var(--accent)':'var(--error)'}}/></div>
+                <div className="node-row"><span>In-Flight</span><span className="val">{ep.inflight||0}</span></div>
+                <div className="node-row"><span>Token/s</span><span className="val">{tps}</span></div>
+                <div className="node-row"><span>Latenz</span><span className="val">{(ep.avg_latency_ms||0).toFixed(0)}ms</span></div>
+                <div className="node-row"><span>Erfolg</span><span className="val">{successRate}</span></div>
+                <div className="node-row"><span>Prio</span><span className="val">#{ep.priority_order}</span></div>
+              </div>
+              <div className={`port port-in ${ep.connected?'connected':''}`}
+                title={ep.connected?'Klick zum Trennen':'Nicht verbunden'}
+                onMouseDown={e=>{e.stopPropagation();toggleConn(ep.id,!ep.connected)}}/>
+            </div>;
+          })}
         </div>
+
+        <div className="zoom-ctrl">
+          <button onClick={()=>setZoom(z=>Math.max(.3,z-.1))} title="Verkleinern">{'\u2212'}</button>
+          <button onClick={resetView} title="Zur\u00fccksetzen">{'\u2299'}</button>
+          <button onClick={()=>setZoom(z=>Math.min(2,z+.1))} title="Vergr\u00f6\u00dfern">+</button>
+        </div>
+        <div className="zoom-info">{(zoom*100).toFixed(0)}% | Pan: {pan.x.toFixed(0)}, {pan.y.toFixed(0)}</div>
       </div>
-      <div class="sb-row" style="margin-top:6px">
-        <div class="sb-field">
-          <label>Ziel-Endpoint</label>
-          <select id="tokEp${t.id}">
-            <option value="">Auto (globales Routing)</option>
-            ${endpoints.map(ep => `<option value="${ep.id}"${String(t.preferred_endpoint_id||'')===String(ep.id)?' selected':''}>${esc(ep.name)}</option>`).join('')}
-          </select>
+
+      {/* Sidebar */}
+      <div className="sidebar">
+        {selectedEp?<div className="sb-sec"><h3>Endpoint Details</h3>
+          <EndpointDetail ep={selectedEp} totalTok={totalTok} onSave={saveEndpoint} onDelete={deleteEndpoint} onToggle={toggleConn} toast={toast}/>
         </div>
-        <div class="sb-field" style="max-width:110px">
-          <label>Source-Prio</label>
-          <input id="tokPrio${t.id}" type="number" min="0" max="1000" value="${t.request_priority||0}"/>
-        </div>
-        <div class="sb-field" style="max-width:120px">
-          <label>Min % Traffic</label>
-          <input id="tokMin${t.id}" type="number" min="0" max="100" step="0.1" value="${t.min_traffic_percent||0}"/>
-        </div>
-      </div>
-      <div class="sb-row" style="margin-top:2px;justify-content:flex-end">
-        <button class="sb-btn" style="font-size:10px;padding:3px 8px" onclick="saveClientTokenRoute(${t.id}, this)">Route speichern</button>
+        :<div className="sb-sec"><h3>Info</h3>
+          <p style={{fontSize:12,color:'var(--muted)',lineHeight:1.5}}>Klicke auf einen Endpoint-Knoten, um Details zu sehen.
+          Ziehe vom <b>Ausgang</b> eines Incoming-Knotens zu einem <b>Eingang</b> eines Endpoints.
+          <br/><br/>{'\u26a1'} <b>Canvas verschieben:</b> Leere Fl\u00e4che ziehen &middot; <b>Zoom:</b> Scrollrad</p>
+        </div>}
+
+        <Section id="addEp" title="+ Endpoint hinzuf\u00fcgen" collapsed={collapsed} onToggle={togSec}>
+          <AddEndpointForm onSubmit={createEndpoint} epCount={(lbState?.endpoints||[]).length}/>
+        </Section>
+
+        <Section id="inc" title="Incoming-Bl\u00f6cke" collapsed={collapsed} onToggle={togSec}>
+          <IncomingBlockList blocks={incomingBlocks} tokens={fullTokens} onCreate={createIncomingBlock} onSave={saveIncomingBlock} onDelete={deleteIncomingBlock}/>
+        </Section>
+
+        <Section id="tok" title="Client-Zugang" collapsed={collapsed} onToggle={togSec}>
+          <p style={{fontSize:11,color:'var(--muted)',wordBreak:'break-all',marginBottom:8}}>
+            Base-URL: <span style={{color:'var(--text)'}}>{typeof location!=='undefined'?location.origin+'/v1':'\u2014'}</span>
+          </p>
+          {(fullTokens||[]).length>3&&<div className="search-wrap">
+            <span className="s-icon">{'\U0001f50d'}</span>
+            <input value={tokenSearch} onChange={e=>setTokenSearch(e.target.value)} placeholder="Token suchen\u2026"/>
+          </div>}
+          <ClientTokenList tokens={filteredTokens} endpoints={lbState?.endpoints||[]} incomingBlocks={incomingBlocks} onSaveRoute={saveTokenRoute} onDelete={deleteClientToken} toast={toast}/>
+          <div style={{marginTop:10,borderTop:'1px solid var(--border-light)',paddingTop:10}}>
+            <AddTokenForm incomingBlocks={incomingBlocks} onSubmit={createClientToken}/>
+          </div>
+        </Section>
       </div>
     </div>
-  `).join('');
+
+    {/* Footer */}
+    <div className="footer">
+      <div className="metric">Token/s: <span className="num">{lbState?.stats?.tokens_per_second||0}</span></div>
+      <div className="metric">Req/s: <span className="num">{lbState?.stats?.requests_per_second||0}</span></div>
+      <div className="metric">In-Flight: <span className={`num ${(lbState?.stats?.total_inflight||0)>50?'crit':(lbState?.stats?.total_inflight||0)>20?'warn':''}`}>{lbState?.stats?.total_inflight||0}</span></div>
+      <div className="metric">Endpoints: <span className="num">{(lbState?.endpoints||[]).length}</span></div>
+      <div className="metric">Verbunden: <span className="num">{(lbState?.endpoints||[]).filter(e=>e.connected).length}</span></div>
+      <div className="metric">Modus: <span className="num">{lbState?.routing_mode==='priority'?'Priorit\u00e4t':'Prozentual'}</span></div>
+      <span className="refresh-ts">{'\u27f3'} {new Date().toLocaleTimeString('de-DE',{hour12:false})}</span>
+    </div>
+
+    <Toasts items={toasts} onRemove={removeToast}/>
+    <ConfirmModal show={!!modal} title={modal?.title} message={modal?.message} btnText={modal?.btnText} onConfirm={onModalConfirm} onCancel={onModalCancel}/>
+    <ShortcutsOverlay show={showShortcuts} onClose={()=>setShowShortcuts(false)}/>
+    {loading&&<div className="ld-ov"><div className="spinner"/></div>}
+  </>;
 }
 
-function copyTok(token, btn){
-  navigator.clipboard.writeText(token).then(()=>{
-    toast('Token kopiert', 'success', 1500);
-    const orig = btn.textContent; btn.textContent='\u2705'; setTimeout(()=>btn.textContent=orig, 1200);
-  }).catch(()=>{ toast('Kopieren fehlgeschlagen', 'error') });
+/* App */
+function App(){
+  const noop = useCallback(()=>{},[]);
+  return <AdminApp user={null} sbClient={null} onLogout={noop}/>;
 }
 
-async function createClientToken(){
-  const name = $('newTokenName').value.trim();
-  if(!name){ toast('Token-Name ist Pflicht','warning'); return; }
-  const token = $('newTokenValue').value.trim() || null;
-  const incomingBlockId = parseInt(($('newTokenIncoming')?.value || '0'), 10) || null;
-  showLoading();
-  try{
-    const result = await api('/admin/api/tokens',{method:'POST',body:JSON.stringify({name, token, incoming_block_id: incomingBlockId})});
-    $('newTokenName').value = '';
-    $('newTokenValue').value = '';
-    toast('Token "'+name+'" erstellt', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
-}
-
-async function saveClientTokenRoute(tid, btn){
-  const incomingRaw = $(`tokIncoming${tid}`).value;
-  const epRaw = $(`tokEp${tid}`).value;
-  const prio = parseInt($(`tokPrio${tid}`).value) || 0;
-  const minPct = parseFloat($(`tokMin${tid}`).value) || 0;
-  const payload = {
-    incoming_block_id: incomingRaw ? parseInt(incomingRaw, 10) : null,
-    preferred_endpoint_id: epRaw ? parseInt(epRaw, 10) : null,
-    request_priority: prio,
-    min_traffic_percent: minPct,
-  };
-  const prev = btn ? btn.textContent : '';
-  try{
-    if(btn) btn.textContent = '\u23f3';
-    await api(`/admin/api/tokens/${tid}`,{method:'PATCH',body:JSON.stringify(payload)});
-    if(btn) btn.textContent = '\u2705';
-    toast('Route gespeichert', 'success', 1500);
-    await loadState();
-    if(btn){ setTimeout(()=>{btn.textContent = prev || 'Route speichern'}, 1000); }
-  }catch(err){
-    if(btn) btn.textContent = prev || 'Route speichern';
-    toast(err.message, 'error');
-  }
-}
-
-async function deleteClientToken(tid){
-  const t = (S.fullTokens||[]).find(x=>x.id===tid);
-  const name = t ? t.name : '#'+tid;
-  const ok = await showConfirm('Token l\u00f6schen', 'Client-Token "'+name+'" wirklich l\u00f6schen?', 'L\u00f6schen');
-  if(!ok) return;
-  showLoading();
-  try{
-    await api(`/admin/api/tokens/${tid}`,{method:'DELETE'});
-    toast('Token "'+name+'" gel\u00f6scht', 'success');
-    await loadState();
-  }catch(err){ toast(err.message, 'error') }
-  finally{ hideLoading() }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  Init                                                                       */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-(function init(){
-  $('adminToken').value = getToken();
-  const sidebar = $('sidebar');
-  if(sidebar){
-    sidebar.addEventListener('input', markFormEdited);
-    sidebar.addEventListener('change', markFormEdited);
-  }
-  // Fetch version on load
-  fetchVersion();
-  // Initial load
-  loadState();
-  // Auto-refresh every 3s
-  setInterval(()=>loadState(true), 3000);
-})();
+ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
 </script>
 </body>
 </html>

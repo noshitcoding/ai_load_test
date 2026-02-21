@@ -18,6 +18,7 @@
 10. [Testing](#testing)
 11. [Troubleshooting](#troubleshooting)
 12. [Load Producer UI](#load-producer-ui)
+13. [Admin UI Guide](#admin-ui-guide)
 
 ---
 
@@ -119,7 +120,8 @@ LB_CLIENT_TOKENS=token-for-client-1,token-for-client-2
 ### 2. Start
 
 ```bash
-docker compose up -d --build
+docker compose -f apps/load-balancer/docker-compose.yml up -d --build
+docker compose -f apps/load-tester/docker-compose.yml up -d --build
 ```
 
 ### 3. Access
@@ -142,7 +144,8 @@ docker compose up -d --build
 ### 5. Stop
 
 ```bash
-docker compose down
+docker compose -f apps/load-tester/docker-compose.yml down
+docker compose -f apps/load-balancer/docker-compose.yml down
 ```
 
 ---
@@ -353,6 +356,23 @@ Every proxied request includes an `X-Request-ID` header:
 
 ## Docker & Deployment
 
+### Split Project Layout
+
+The stack is physically separated into two independent projects:
+
+- `apps/load-balancer` (own Dockerfile + own `docker-compose.yml`)
+- `apps/load-tester` (own Dockerfiles + own `docker-compose.yml`)
+
+Each project can be built, started, and stopped independently.
+
+```bash
+# Build only load balancer
+docker compose -f apps/load-balancer/docker-compose.yml build --no-cache
+
+# Build only load tester
+docker compose -f apps/load-tester/docker-compose.yml build --no-cache
+```
+
 ### Multi-Stage Builds
 
 The Load Balancer Dockerfile uses a multi-stage build:
@@ -376,13 +396,12 @@ The Load Balancer Dockerfile uses a multi-stage build:
 - **Body size limit**: `client_max_body_size 10m`
 - **WebSocket upgrade** support for the WS proxy
 
-### Docker Compose Services
+### Docker Compose Projects
 
-| Service | Image | Port | Description |
-|---|---|---|---|
-| `load-balancer` | Custom (multi-stage) | 8090 | Load Balancer + Admin UI |
-| `load-producer` | nginx:alpine | 8088 | Static load producer UI |
-| `load-producer-proxy` | Custom | — | WebSocket proxy (internal) |
+| Project | Compose file | Services |
+|---|---|---|
+| Load Balancer | `apps/load-balancer/docker-compose.yml` | `load-balancer` |
+| Load Tester | `apps/load-tester/docker-compose.yml` | `load-producer`, `load-producer-proxy` |
 
 ---
 
@@ -516,6 +535,17 @@ The Load Producer (`http://localhost:8088`) provides a browser-based load testin
 3. Start the load test
 
 See `LOAD_TESTER_UI_GUIDE.md` for detailed field documentation.
+
+---
+
+## Admin UI Guide
+
+See `LOAD_BALANCER_ADMIN_UI_GUIDE.md` for detailed admin UI documentation, including:
+
+- Detailed `?` help content
+- Routing and prioritized-input behavior
+- Incoming-block and token routing workflow
+- Dropdown sorting rules and operational tips
 
 ---
 

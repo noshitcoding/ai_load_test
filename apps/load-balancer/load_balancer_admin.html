@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LLM Load Balancer · Admin</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
+<style>
+/* ─── Reset ─── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ─── HPE Design System Tokens ─── */
+:root{
+  --hpe-green:#01A982;
+  --hpe-green-dark:#008567;
+  --hpe-green-light:#17EBA0;
+  --hpe-green-bg:rgba(1,169,130,.06);
+  --hpe-blue:#00739D;
+  --hpe-purple:#7630EA;
+  --bg:#F2F2F2;
+  --surface:#FFFFFF;
+  --card:#FFFFFF;
+  --card-hover:#F7F7F7;
+  --border:#CCCCCC;
+  --border-light:#E8E8E8;
+  --text:#333333;
+  --text-sec:#555555;
+  --muted:#999999;
+  --accent:var(--hpe-green);
+  --accent-hover:var(--hpe-green-dark);
+  --ok:#01A982;
+  --ok-bg:rgba(1,169,130,.08);
+  --err:#FF4040;
+  --err-bg:rgba(255,64,64,.06);
+  --warn:#FFBC44;
+  --warn-bg:rgba(255,188,68,.08);
+  --info:#00739D;
+  --info-bg:rgba(0,115,157,.06);
+  --wire-ep:var(--hpe-green);
+  --wire-tok:var(--hpe-purple);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.06);
+  --shadow:0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:0 4px 24px rgba(0,0,0,.12);
+  --r:8px;
+  --rl:12px;
+  color-scheme:light;
+  font-family:'Segoe UI','Inter',system-ui,-apple-system,sans-serif;
+}
+
+body{background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+a{color:var(--accent);text-decoration:none}
+
+/* ─── Login ─── */
+.login-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:linear-gradient(135deg,#F2F2F2 0%,#E8F5F1 100%)}
+.login-box{background:#FFF;border-radius:16px;box-shadow:var(--shadow-lg);padding:48px 40px;width:380px;text-align:center}
+.login-box .brand{font-size:32px;font-weight:700;color:var(--hpe-green);letter-spacing:-1px}
+.login-box .sub{font-size:13px;color:var(--muted);margin-bottom:32px}
+.login-box .fld{text-align:left;margin-bottom:16px}
+.login-box .fld label{display:block;font-size:11px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.login-box .fld input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);font:14px/1.5 inherit;color:var(--text);background:#FFF;transition:border-color .2s,box-shadow .2s}
+.login-box .fld input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--hpe-green-bg)}
+.login-box .btn-go{width:100%;padding:12px;border:none;border-radius:var(--r);background:var(--hpe-green);color:#FFF;font:600 14px/1.4 inherit;cursor:pointer;transition:background .2s,transform .1s}
+.login-box .btn-go:hover{background:var(--hpe-green-dark)}
+.login-box .btn-go:active{transform:scale(.98)}
+.login-box .btn-go:disabled{opacity:.55;cursor:not-allowed}
+.login-box .err-msg{color:var(--err);font-size:12px;margin-top:12px}
+
+/* ─── Header ─── */
+.hdr{display:flex;align-items:center;gap:10px;padding:0 16px;height:50px;background:var(--surface);border-bottom:1px solid var(--border-light);flex-shrink:0;z-index:20;box-shadow:var(--shadow-sm)}
+.hdr .logo{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;white-space:nowrap;color:var(--hpe-green)}
+.hdr .logo .badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--hpe-green);color:#FFF}
+.hdr input,.hdr select{font:12px/1.4 inherit;padding:5px 10px;border-radius:var(--r);border:1px solid var(--border);background:#FFF;color:var(--text);transition:border-color .2s}
+.hdr input:focus,.hdr select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--hpe-green-bg)}
+.hdr input[type=password]{width:150px}
+.hdr button{font:12px/1.4 inherit;padding:5px 12px;border-radius:var(--r);border:1px solid var(--border);background:#FFF;color:var(--text);cursor:pointer;transition:all .15s}
+.hdr button:hover{border-color:var(--accent);color:var(--accent)}
+.hdr button:active{transform:scale(.97)}
+.hdr .sep{width:1px;height:22px;background:var(--border-light)}
+.hdr .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:background .3s}
+.hdr .dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.hdr .dot.off{background:var(--err);box-shadow:0 0 4px var(--err)}
+
+/* ─── Main ─── */
+.main{display:flex;flex:1;min-height:0;overflow:hidden}
+
+/* ─── Canvas ─── */
+.canvas{flex:1;position:relative;overflow:hidden;background:var(--bg);cursor:grab}
+.canvas.panning{cursor:grabbing}
+.canvas .grid{position:absolute;inset:0;background-image:radial-gradient(circle,var(--border) .8px,transparent .8px);background-size:24px 24px;opacity:.5;pointer-events:none}
+.world{position:absolute;top:0;left:0;transform-origin:0 0}
+.wires{position:absolute;top:0;left:0;width:6000px;height:6000px;pointer-events:none;z-index:1}
+.wire{stroke:var(--wire-ep);stroke-width:2.5;fill:none;opacity:.4;transition:opacity .3s}
+.wire.active{opacity:.85;filter:drop-shadow(0 0 4px rgba(1,169,130,.3))}
+.wire-tok{stroke:var(--wire-tok);opacity:.5}
+.wire-temp{stroke:var(--accent);stroke-dasharray:8 4;opacity:.7}
+.wire-lbl{fill:var(--muted);font-size:11px;font-family:inherit}
+.canvas .zctrl{position:absolute;bottom:14px;left:14px;display:flex;gap:4px;z-index:5}
+.canvas .zctrl button{width:32px;height:32px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border);color:var(--text);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .15s;box-shadow:var(--shadow-sm)}
+.canvas .zctrl button:hover{background:var(--card-hover);border-color:var(--accent);color:var(--accent)}
+.canvas .zinfo{position:absolute;bottom:14px;left:170px;font-size:11px;color:var(--muted);background:var(--surface);padding:4px 10px;border-radius:var(--r);border:1px solid var(--border-light);z-index:5}
+
+/* ─── Nodes ─── */
+.node{position:absolute;border-radius:var(--rl);border:1px solid var(--border);background:var(--card);box-shadow:var(--shadow);z-index:5;cursor:grab;user-select:none;transition:box-shadow .2s,border-color .2s;animation:nodeIn .25s ease-out}
+@keyframes nodeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.node:hover{box-shadow:var(--shadow-lg);border-color:var(--accent)}
+.node.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.node-ep{width:220px}
+.node-inc{width:200px;border-color:var(--warn)}
+.node-inc:hover{border-color:var(--warn)}
+.node-ct{width:180px;border-color:var(--hpe-purple)}
+.node-ct:hover{border-color:var(--hpe-purple)}
+.nhead{padding:10px 14px 6px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;border-bottom:1px solid var(--border-light);white-space:nowrap;overflow:hidden}
+.nhead .ico{font-size:16px;flex-shrink:0}
+.nbody{padding:8px 14px 10px;font-size:12px;color:var(--text-sec);display:grid;gap:3px}
+.nrow{display:flex;justify-content:space-between}
+.nrow .v{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.nbar{height:4px;border-radius:2px;background:var(--border-light);margin-top:2px}
+.nbar .fill{height:100%;border-radius:2px;transition:width .5s}
+.pill{padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;display:inline-block;margin-left:auto;flex-shrink:0}
+.pill-ok{background:var(--ok-bg);color:var(--ok)}
+.pill-off{background:var(--err-bg);color:var(--err)}
+.pill-warn{background:var(--warn-bg);color:var(--warn)}
+
+/* ─── Ports ─── */
+.port{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--border);border:2px solid var(--card);z-index:6;cursor:crosshair;transition:background .15s,transform .15s}
+.port:hover{background:var(--accent);transform:scale(1.3)}
+.port-out{right:-7px;top:50%;margin-top:-7px}
+.port-in{left:-7px;top:50%;margin-top:-7px}
+.port.conn{background:var(--ok)}
+
+/* ─── Sidebar ─── */
+.sidebar{width:350px;background:var(--surface);border-left:1px solid var(--border-light);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:10;box-shadow:-2px 0 8px rgba(0,0,0,.03)}
+.sidebar::-webkit-scrollbar{width:6px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sb-sec{padding:14px 16px;border-bottom:1px solid var(--border-light)}
+.sb-sec h3{font-size:11px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color .2s}
+.sb-sec h3:hover{color:var(--text)}
+.sb-sec h3 .chev{transition:transform .25s;font-size:10px;opacity:.5}
+.sb-sec h3 .chev.shut{transform:rotate(-90deg)}
+.sb-sec .sec-body{overflow:hidden;transition:max-height .3s ease,opacity .2s;max-height:2000px;opacity:1}
+.sb-sec .sec-body.shut{max-height:0;opacity:0;overflow:hidden}
+.sb-row{display:flex;gap:8px;margin-bottom:8px;align-items:end}
+.sb-fld{display:flex;flex-direction:column;gap:3px;flex:1}
+.sb-fld label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:600}
+.sb-fld input,.sb-fld select{font:12px/1.4 inherit;padding:7px 9px;border-radius:6px;border:1px solid var(--border);background:#FFF;color:var(--text);width:100%;transition:border-color .2s,box-shadow .2s}
+.sb-fld input:focus,.sb-fld select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--hpe-green-bg)}
+.sb-fld input.dirty{border-color:var(--warn);background:var(--warn-bg)}
+.sb-btn{font:12px/1.4 inherit;padding:7px 14px;border-radius:6px;border:1px solid var(--border);background:#FFF;color:var(--text);cursor:pointer;white-space:nowrap;transition:all .15s}
+.sb-btn:hover{border-color:var(--accent);color:var(--accent)}
+.sb-btn:active{transform:scale(.97)}
+.sb-btn.primary{background:var(--hpe-green);color:#FFF;border-color:var(--hpe-green)}
+.sb-btn.primary:hover{background:var(--hpe-green-dark)}
+.sb-btn.danger{color:var(--err);border-color:var(--err);background:transparent}
+.sb-btn.danger:hover{background:var(--err-bg)}
+.sb-btn.green{color:var(--ok);border-color:var(--ok);background:transparent}
+.sb-btn.green:hover{background:var(--ok-bg)}
+.sb-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+.dirty-hint{font-size:10px;color:var(--warn);margin-bottom:6px;display:flex;align-items:center;gap:4px}
+
+/* ─── Footer ─── */
+.footer{display:flex;align-items:center;gap:16px;padding:0 16px;height:38px;background:var(--surface);border-top:1px solid var(--border-light);font-size:12px;color:var(--muted);flex-shrink:0;z-index:20}
+.footer .m{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.footer .m .n{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+.footer .m .n.w{color:var(--warn)}
+.footer .m .n.c{color:var(--err)}
+.footer .rts{margin-left:auto;font-size:10px;color:var(--muted)}
+
+/* ─── Toast ─── */
+.toast-wrap{position:fixed;top:56px;right:16px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border-light);box-shadow:var(--shadow-lg);font-size:12px;color:var(--text);pointer-events:auto;animation:toastIn .3s ease-out;min-width:240px;max-width:400px}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.toast.success{border-left:3px solid var(--ok)}
+.toast.error{border-left:3px solid var(--err)}
+.toast.warning{border-left:3px solid var(--warn)}
+.toast.info{border-left:3px solid var(--info)}
+
+/* ─── Modal ─── */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:900;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-box{background:#FFF;border:1px solid var(--border-light);border-radius:var(--rl);box-shadow:var(--shadow-lg);padding:28px;max-width:420px;width:90%;animation:modalIn .2s ease-out}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal-box h3{font-size:16px;margin-bottom:8px;color:var(--text)}
+.modal-box p{font-size:13px;color:var(--text-sec);margin-bottom:20px;line-height:1.5}
+.modal-box .mact{display:flex;gap:8px;justify-content:flex-end}
+
+/* ─── Shortcuts ─── */
+.sc-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:950;display:flex;align-items:center;justify-content:center}
+.sc-panel{background:#FFF;border:1px solid var(--border-light);border-radius:var(--rl);box-shadow:var(--shadow-lg);padding:24px 28px;max-width:440px;width:90%;animation:modalIn .2s ease-out}
+.sc-panel h3{font-size:16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.sc-panel .xb{cursor:pointer;opacity:.4;font-size:18px;background:none;border:none;color:var(--text)}
+.sc-panel .xb:hover{opacity:1}
+.sc-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-light)}
+.sc-row:last-child{border:none}
+.sc-row .desc{font-size:13px}
+.sc-row kbd{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;font-family:monospace;color:var(--muted);min-width:24px;text-align:center}
+
+/* ─── Loading ─── */
+.ld-ov{position:fixed;inset:0;background:rgba(255,255,255,.6);z-index:800;display:flex;align-items:center;justify-content:center}
+.spinner{width:36px;height:36px;border:3px solid var(--border-light);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── Search ─── */
+.s-wrap{position:relative;margin-bottom:8px}
+.s-wrap .s-ico{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none;color:var(--muted)}
+.s-wrap input{width:100%;padding:7px 10px 7px 28px;border:1px solid var(--border);background:#FFF;color:var(--text);border-radius:6px;font-size:12px;transition:border-color .2s}
+.s-wrap input:focus{outline:none;border-color:var(--accent)}
+
+/* ─── Responsive ─── */
+@media(max-width:900px){.sidebar{width:280px}}
+@media(max-width:640px){.main{flex-direction:column}.sidebar{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--border-light)}.canvas{min-height:40vh}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script type="text/babel" data-presets="env,react">
+const {useState,useEffect,useMemo,useRef,useCallback}=React;
+
+/* ─── Constants ─── */
+const NW={ep:220,inc:200,ct:180};
+const NH={ep:230,inc:100,ct:110};
+const TICONS={success:'\u2705',error:'\u274c',warning:'\u26a0\ufe0f',info:'\u2139\ufe0f'};
+const uid=()=>`${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+const bez=(x1,y1,x2,y2)=>{const cp=Math.min(Math.abs(x2-x1)*.5,150);return`M ${x1} ${y1} C ${x1+cp} ${y1}, ${x2-cp} ${y2}, ${x2} ${y2}`};
+
+/* ─── API ─── */
+function mkApi(tokRef){
+  return async(path,opts={})=>{
+    const h=Object.assign({'Content-Type':'application/json','X-Admin-Token':tokRef.current||''},opts.headers||{});
+    const r=await fetch(path,{...opts,headers:h});
+    const txt=await r.text();
+    let d;try{d=txt?JSON.parse(txt):null}catch{d={raw:txt}}
+    if(!r.ok)throw new Error((d&&(d.detail||d.error))||r.status+' '+r.statusText);
+    return d;
+  };
+}
+
+/* ─── Login ─── */
+function LoginScreen({sbClient,onLogin}){
+  const [email,setEmail]=useState('');const [pw,setPw]=useState('');
+  const [err,setErr]=useState('');const [busy,setBusy]=useState(false);
+  const go=async e=>{
+    e.preventDefault();setErr('');setBusy(true);
+    try{
+      const{data,error}=await sbClient.auth.signInWithPassword({email,password:pw});
+      if(error){
+        if(error.message?.includes('Invalid login')){
+          const{data:su,error:se}=await sbClient.auth.signUp({email,password:pw});
+          if(se)throw se;if(su?.user){onLogin(su.user);return}
+        }
+        throw error;
+      }
+      if(data?.user)onLogin(data.user);
+    }catch(ex){setErr(ex.message||'Anmeldung fehlgeschlagen')}
+    finally{setBusy(false)}
+  };
+  return <div className="login-wrap"><form className="login-box" onSubmit={go}>
+    <div className="brand">HPE</div>
+    <div className="sub">LLM Load Balancer &middot; Admin</div>
+    <div className="fld"><label>E-Mail</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Admin@hpe.com" required autoFocus/></div>
+    <div className="fld"><label>Passwort</label><input type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="Passwort" required/></div>
+    <button type="submit" className="btn-go" disabled={busy}>{busy?'Anmelden \u2026':'Anmelden'}</button>
+    {err&&<div className="err-msg">{err}</div>}
+  </form></div>;
+}
+
+/* ─── Toasts ─── */
+function Toasts({items,onRemove}){
+  return <div className="toast-wrap">{items.map(t=><div key={t.id} className={`toast ${t.kind}`}>
+    <span style={{fontSize:16,flexShrink:0}}>{TICONS[t.kind]||''}</span>
+    <span style={{flex:1,lineHeight:1.4}}>{t.msg}</span>
+    <span style={{cursor:'pointer',opacity:.4,fontSize:14,padding:'0 2px',flexShrink:0}} onClick={()=>onRemove(t.id)}>{'\u2715'}</span>
+  </div>)}</div>;
+}
+
+/* ─── Confirm ─── */
+function ConfirmModal({show,title,message,btnText,onOk,onNo}){
+  if(!show)return null;
+  return <div className="modal-ov" onClick={onNo}><div className="modal-box" onClick={e=>e.stopPropagation()}>
+    <h3>{title||'Best\u00e4tigung'}</h3><p>{message||'Sind Sie sicher?'}</p>
+    <div className="mact"><button className="sb-btn" onClick={onNo}>Abbrechen</button><button className="sb-btn danger" onClick={onOk}>{btnText||'Best\u00e4tigen'}</button></div>
+  </div></div>;
+}
+
+/* ─── Shortcuts ─── */
+function ShortcutsOv({show,onClose}){
+  if(!show)return null;
+  return <div className="sc-ov" onClick={onClose}><div className="sc-panel" onClick={e=>e.stopPropagation()}>
+    <h3>Tastenk\u00fcrzel <button className="xb" onClick={onClose}>{'\u2715'}</button></h3>
+    {[['Aktualisieren','R'],['Tastenk\u00fcrzel','?'],['Auswahl aufheben','Esc'],['Token suchen','/'],['Canvas verschieben','Drag'],['Zoom','Scrollrad']].map(([d,k])=>
+      <div key={k} className="sc-row"><span className="desc">{d}</span><kbd>{k}</kbd></div>)}
+  </div></div>;
+}
+
+/* ─── Collapsible Section ─── */
+function Sec({id,title,collapsed,onToggle,children}){
+  const shut=!!collapsed[id];
+  return <div className="sb-sec">
+    <h3 onClick={()=>onToggle(id)}>{title} <span className={`chev ${shut?'shut':''}`}>{'\u25be'}</span></h3>
+    <div className={`sec-body ${shut?'shut':''}`}>{children}</div>
+  </div>;
+}
+
+/*
+ * ═══════════════════════════════════════════════════════════════
+ *  CORE FIX: EndpointDetail tracks "dirty" state.
+ *  When the user edits a field, the form is marked dirty.
+ *  Polling updates DO NOT overwrite dirty form fields.
+ *  After Save or endpoint switch, dirty is cleared.
+ * ═══════════════════════════════════════════════════════════════
+ */
+function EndpointDetail({ep,totalTok,onSave,onDelete,onToggle,toast}){
+  const [form,setForm]=useState({});
+  const dirtyRef=useRef(false);
+  const lastIdRef=useRef(null);
+
+  // Sync from server when endpoint changes OR when form is NOT dirty
+  useEffect(()=>{
+    const idChanged=ep.id!==lastIdRef.current;
+    if(idChanged){
+      // Always sync on endpoint switch
+      lastIdRef.current=ep.id;
+      dirtyRef.current=false;
+      setForm({
+        name:ep.name,url:ep.base_url,key:'',
+        quota:ep.token_quota_percent,prio:ep.priority_order,
+        maxC:ep.max_concurrent,tout:ep.timeout_seconds,
+        tls:ep.verify_tls,enabled:ep.enabled,conn:ep.connected
+      });
+    } else if(!dirtyRef.current){
+      // Only sync from server if user hasn't changed anything
+      setForm({
+        name:ep.name,url:ep.base_url,key:'',
+        quota:ep.token_quota_percent,prio:ep.priority_order,
+        maxC:ep.max_concurrent,tout:ep.timeout_seconds,
+        tls:ep.verify_tls,enabled:ep.enabled,conn:ep.connected
+      });
+    }
+  });
+
+  const upd=(field,val)=>{
+    dirtyRef.current=true;
+    setForm(prev=>({...prev,[field]:val}));
+  };
+
+  const actualPct=totalTok>0?((ep.completion_tokens_total||0)/totalTok*100).toFixed(1):'0.0';
+  const isDirty=dirtyRef.current;
+
+  const save=()=>{
+    const data={
+      name:(form.name||'').trim(),base_url:(form.url||'').trim(),
+      token_quota_percent:parseFloat(form.quota)||0,
+      priority_order:parseInt(form.prio)||10,
+      max_concurrent:parseInt(form.maxC)||0,
+      timeout_seconds:parseFloat(form.tout)||120,
+      verify_tls:form.tls,enabled:form.enabled,connected:form.conn
+    };
+    if((form.key||'').trim())data.api_key=form.key.trim();
+    dirtyRef.current=false;
+    onSave(ep.id,data);
+  };
+
+  const discard=()=>{
+    dirtyRef.current=false;
+    setForm({
+      name:ep.name,url:ep.base_url,key:'',
+      quota:ep.token_quota_percent,prio:ep.priority_order,
+      maxC:ep.max_concurrent,tout:ep.timeout_seconds,
+      tls:ep.verify_tls,enabled:ep.enabled,conn:ep.connected
+    });
+  };
+
+  return <>
+    {isDirty&&<div className="dirty-hint">{'\u270f\ufe0f'} Ungespeicherte \u00c4nderungen</div>}
+    <div className="sb-row"><div className="sb-fld"><label>Name</label><input className={isDirty&&form.name!==ep.name?'dirty':''} value={form.name||''} onChange={e=>upd('name',e.target.value)}/></div></div>
+    <div className="sb-row"><div className="sb-fld"><label>Base URL</label><input className={isDirty&&form.url!==ep.base_url?'dirty':''} value={form.url||''} onChange={e=>upd('url',e.target.value)}/></div></div>
+    <div className="sb-row"><div className="sb-fld"><label>API Key (leer=unver\u00e4ndert)</label><input type="password" value={form.key||''} onChange={e=>upd('key',e.target.value)} placeholder="(unver\u00e4ndert)"/></div></div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Quota %</label><input type="number" min="0" max="100" value={form.quota??0} onChange={e=>upd('quota',e.target.value)}/></div>
+      <div className="sb-fld"><label>Ist %</label><input value={actualPct} disabled style={{opacity:.6}}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Priorit\u00e4t</label><input type="number" min="1" max="100" value={form.prio??10} onChange={e=>upd('prio',e.target.value)}/></div>
+      <div className="sb-fld"><label>Max Parallel</label><input type="number" min="0" value={form.maxC??0} onChange={e=>upd('maxC',e.target.value)}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Timeout (s)</label><input type="number" min="5" value={form.tout??120} onChange={e=>upd('tout',e.target.value)}/></div>
+      <div className="sb-fld"><label>TLS pr\u00fcfen</label><select value={form.tls?'1':'0'} onChange={e=>upd('tls',e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Aktiviert</label><select value={form.enabled?'1':'0'} onChange={e=>upd('enabled',e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+      <div className="sb-fld"><label>Verbunden</label><select value={form.conn?'1':'0'} onChange={e=>upd('conn',e.target.value==='1')}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+    </div>
+    <div style={{fontSize:11,color:'var(--muted)',margin:'6px 0'}}>
+      Key: {ep.api_key_preview} | Req: {ep.total_requests} | OK: {ep.total_success} | P-Tok: {(ep.prompt_tokens_total||0).toLocaleString()} | C-Tok: {(ep.completion_tokens_total||0).toLocaleString()}
+    </div>
+    <div className="sb-row" style={{gap:6}}>
+      <button className="sb-btn primary" onClick={save}>Speichern</button>
+      {isDirty&&<button className="sb-btn" onClick={discard}>Verwerfen</button>}
+      <button className={`sb-btn ${ep.connected?'danger':'green'}`} onClick={()=>onToggle(ep.id,!ep.connected)}>{ep.connected?'Trennen':'Verbinden'}</button>
+      <button className="sb-btn danger" onClick={()=>onDelete(ep.id)}>L\u00f6schen</button>
+    </div>
+  </>;
+}
+
+/* ─── Add Endpoint ─── */
+function AddEpForm({onSubmit,epCount}){
+  const [f,sF]=useState({name:'',url:'',key:'',quota:0,prio:10,maxC:0,tout:120,tls:true,conn:true});
+  const go=()=>{
+    if(!f.name.trim()||!f.url.trim())return;
+    onSubmit({name:f.name.trim(),base_url:f.url.trim(),api_key:f.key.trim(),
+      token_quota_percent:parseFloat(f.quota)||0,priority_order:parseInt(f.prio)||10,
+      max_concurrent:parseInt(f.maxC)||0,timeout_seconds:parseFloat(f.tout)||120,
+      verify_tls:f.tls,connected:f.conn,pos_x:420,pos_y:80+(epCount||0)*160});
+    sF(p=>({...p,name:'',url:'',key:''}));
+  };
+  return <>
+    <div className="sb-row"><div className="sb-fld"><label>Name</label><input value={f.name} onChange={e=>sF(p=>({...p,name:e.target.value}))} placeholder="vllm-eu-1"/></div></div>
+    <div className="sb-row"><div className="sb-fld"><label>Base URL</label><input value={f.url} onChange={e=>sF(p=>({...p,url:e.target.value}))} placeholder="https://host:8000/v1"/></div></div>
+    <div className="sb-row"><div className="sb-fld"><label>API Key</label><input type="password" value={f.key} onChange={e=>sF(p=>({...p,key:e.target.value}))} placeholder="sk-..."/></div></div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Quota %</label><input type="number" min="0" max="100" value={f.quota} onChange={e=>sF(p=>({...p,quota:e.target.value}))}/></div>
+      <div className="sb-fld"><label>Priorit\u00e4t</label><input type="number" min="1" max="100" value={f.prio} onChange={e=>sF(p=>({...p,prio:e.target.value}))}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Max Parallel</label><input type="number" min="0" value={f.maxC} onChange={e=>sF(p=>({...p,maxC:e.target.value}))}/></div>
+      <div className="sb-fld"><label>Timeout (s)</label><input type="number" min="5" value={f.tout} onChange={e=>sF(p=>({...p,tout:e.target.value}))}/></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>TLS</label><select value={f.tls?'1':'0'} onChange={e=>sF(p=>({...p,tls:e.target.value==='1'}))}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+      <div className="sb-fld"><label>Sofort verbinden</label><select value={f.conn?'1':'0'} onChange={e=>sF(p=>({...p,conn:e.target.value==='1'}))}><option value="1">Ja</option><option value="0">Nein</option></select></div>
+    </div>
+    <div className="sb-row" style={{marginTop:6}}><button className="sb-btn primary" onClick={go}>Endpoint anlegen</button></div>
+  </>;
+}
+
+/* ─── Incoming Block List ─── */
+function IncBlockList({blocks,tokens,onCreate,onSave,onDelete}){
+  const [newN,setNewN]=useState('');
+  const [edits,setEdits]=useState({});
+  const tc=useMemo(()=>{const m={};(tokens||[]).forEach(t=>{const b=t.incoming_block_id||0;m[b]=(m[b]||0)+1});return m},[tokens]);
+  return <>
+    {blocks.map(b=><div key={b.id} style={{marginBottom:8,padding:8,background:'var(--bg)',borderRadius:6,border:'1px solid var(--border-light)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <input value={edits[b.id]!=null?edits[b.id]:b.name} onChange={e=>setEdits(p=>({...p,[b.id]:e.target.value}))}
+          style={{flex:1,font:'12px/1.4 inherit',padding:'4px 6px',borderRadius:4,border:'1px solid var(--border)',background:'#FFF',color:'var(--text)'}}/>
+        <button className="sb-btn" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>{const n=(edits[b.id]!=null?edits[b.id]:b.name).trim();if(n)onSave(b.id,n)}}>{'\U0001f4be'}</button>
+        <button className="sb-btn danger" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>onDelete(b.id)}>{'\u2715'}</button>
+      </div>
+      <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Tokens: {tc[b.id]||0}</div>
+    </div>)}
+    <div style={{marginTop:10,borderTop:'1px solid var(--border-light)',paddingTop:10}}>
+      <div className="sb-row"><div className="sb-fld"><label>Block-Name</label><input value={newN} onChange={e=>setNewN(e.target.value)} placeholder="z.B. Setup A"/></div></div>
+      <div className="sb-row" style={{marginTop:4}}><button className="sb-btn primary" onClick={()=>{const n=newN.trim()||`Incoming ${blocks.length+1}`;onCreate(n,240+blocks.length*36,220+blocks.length*84);setNewN('')}}>Block erstellen</button></div>
+    </div>
+  </>;
+}
+
+/*
+ * ═══ ClientTokenItem – also tracks dirty state ═══
+ */
+function ClientTokenItem({t,endpoints,incomingBlocks,onSaveRoute,onDelete,toast}){
+  const [form,setForm]=useState({ibid:String(t.incoming_block_id||''),epid:String(t.preferred_endpoint_id||''),prio:t.request_priority||0,minPct:t.min_traffic_percent||0});
+  const dirtyRef=useRef(false);
+  const lastIdRef=useRef(t.id);
+
+  // Sync from server only if not dirty
+  useEffect(()=>{
+    if(t.id!==lastIdRef.current){
+      lastIdRef.current=t.id;
+      dirtyRef.current=false;
+      setForm({ibid:String(t.incoming_block_id||''),epid:String(t.preferred_endpoint_id||''),prio:t.request_priority||0,minPct:t.min_traffic_percent||0});
+    } else if(!dirtyRef.current){
+      setForm({ibid:String(t.incoming_block_id||''),epid:String(t.preferred_endpoint_id||''),prio:t.request_priority||0,minPct:t.min_traffic_percent||0});
+    }
+  });
+
+  const upd=(k,v)=>{dirtyRef.current=true;setForm(p=>({...p,[k]:v}))};
+  const copy=()=>{navigator.clipboard.writeText(t.token).then(()=>toast('Token kopiert','success')).catch(()=>toast('Kopieren fehlgeschlagen','error'))};
+  const save=()=>{
+    dirtyRef.current=false;
+    onSaveRoute(t.id,{incoming_block_id:form.ibid?parseInt(form.ibid):null,preferred_endpoint_id:form.epid?parseInt(form.epid):null,request_priority:parseInt(form.prio)||0,min_traffic_percent:parseFloat(form.minPct)||0});
+  };
+
+  return <div style={{marginBottom:8,padding:10,background:'var(--bg)',borderRadius:6,border:'1px solid var(--border-light)'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+      <span style={{fontSize:12,fontWeight:600}}>{t.name}</span>
+      <button className="sb-btn danger" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>onDelete(t.id)}>{'\u2715'}</button>
+    </div>
+    <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:8}}>
+      <input readOnly value={t.token} style={{flex:1,font:'11px/1.4 monospace',padding:'4px 6px',borderRadius:4,border:'1px solid var(--border)',background:'#FFF',color:'var(--accent)',cursor:'text'}} onClick={e=>e.target.select()}/>
+      <button className="sb-btn" style={{fontSize:10,padding:'3px 8px'}} onClick={copy}>{'\U0001f4cb'}</button>
+    </div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Inc. Block</label><select value={form.ibid} onChange={e=>upd('ibid',e.target.value)}>{incomingBlocks.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+    </div>
+    <div className="sb-row">
+      <div className="sb-fld"><label>Ziel-Endpoint</label><select value={form.epid} onChange={e=>upd('epid',e.target.value)}><option value="">Auto</option>{endpoints.map(ep=><option key={ep.id} value={ep.id}>{ep.name}</option>)}</select></div>
+      <div className="sb-fld" style={{maxWidth:90}}><label>Prio</label><input type="number" min="0" value={form.prio} onChange={e=>upd('prio',e.target.value)}/></div>
+      <div className="sb-fld" style={{maxWidth:90}}><label>Min %</label><input type="number" min="0" max="100" step="0.1" value={form.minPct} onChange={e=>upd('minPct',e.target.value)}/></div>
+    </div>
+    {dirtyRef.current&&<div className="dirty-hint">{'\u270f\ufe0f'} Ungespeichert</div>}
+    <div style={{textAlign:'right',marginTop:2}}><button className="sb-btn" style={{fontSize:10,padding:'3px 8px'}} onClick={save}>Route speichern</button></div>
+  </div>;
+}
+
+function ClientTokenList({tokens,endpoints,incomingBlocks,onSaveRoute,onDelete,toast}){
+  if(!tokens||tokens.length===0)return <p style={{fontSize:11,color:'var(--muted)'}}>Keine Client-Tokens vorhanden.</p>;
+  return <>{tokens.map(t=><ClientTokenItem key={t.id} t={t} endpoints={endpoints} incomingBlocks={incomingBlocks} onSaveRoute={onSaveRoute} onDelete={onDelete} toast={toast}/>)}</>;
+}
+
+/* ─── Add Token ─── */
+function AddTokenForm({incomingBlocks,onSubmit}){
+  const [name,setName]=useState('');const [tok,setTok]=useState('');const [ibid,setIbid]=useState(incomingBlocks[0]?.id||'');
+  const go=()=>{if(!name.trim())return;onSubmit(name.trim(),tok.trim(),ibid?parseInt(ibid):null);setName('');setTok('')};
+  return <>
+    <div className="sb-row"><div className="sb-fld"><label>Token-Name</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="z.B. load-tester-1"/></div></div>
+    <div className="sb-row"><div className="sb-fld"><label>Token (leer=auto)</label><input value={tok} onChange={e=>setTok(e.target.value)} placeholder="auto-generiert"/></div></div>
+    <div className="sb-row"><div className="sb-fld"><label>Incoming-Block</label><select value={ibid} onChange={e=>setIbid(e.target.value)}>{incomingBlocks.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></div></div>
+    <div className="sb-row" style={{marginTop:4}}><button className="sb-btn primary" onClick={go}>Token erstellen</button></div>
+  </>;
+}
+
+/* ═══════════════════════════════════════════════ */
+/*  AdminApp – main application component         */
+/* ═══════════════════════════════════════════════ */
+function AdminApp({user,sbClient,onLogout}){
+  const [lbState,setLbState]=useState(null);
+  const [fullTokens,setFullTokens]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [pan,setPan]=useState({x:0,y:0});
+  const [zoom,setZoom]=useState(1);
+  const [connected,setConnected]=useState(false);
+  const [toasts,setToasts]=useState([]);
+  const [collapsed,setCollapsed]=useState(()=>{try{return JSON.parse(localStorage.getItem('lb_collapsed')||'{}')}catch{return{}}});
+  const [modal,setModal]=useState(null);
+  const [showSC,setShowSC]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [adminToken,setAdminToken]=useState(()=>localStorage.getItem('lb_admin_token')||'');
+  const [tokSearch,setTokSearch]=useState('');
+  const [tempWire,setTempWire]=useState(null);
+  const [tick,setTick]=useState(Date.now());
+
+  const tokRef=useRef(adminToken);
+  const panRef=useRef(null);
+  const dragRef=useRef(null);
+  const wireRef=useRef(null);
+  const cvRef=useRef(null);
+  const modalResRef=useRef(null);
+  const panSt=useRef(pan);
+  const zoomSt=useRef(zoom);
+
+  useEffect(()=>{tokRef.current=adminToken;localStorage.setItem('lb_admin_token',adminToken)},[adminToken]);
+  useEffect(()=>{panSt.current=pan},[pan]);
+  useEffect(()=>{zoomSt.current=zoom},[zoom]);
+
+  const api=useMemo(()=>mkApi(tokRef),[]);
+
+  const toast=useCallback((msg,kind='info')=>{
+    const id=uid();setToasts(p=>[{id,msg,kind},...p].slice(0,6));
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),4000);
+  },[]);
+  const rmToast=useCallback(id=>setToasts(p=>p.filter(t=>t.id!==id)),[]);
+
+  const confirm=useCallback((title,msg,btn)=>new Promise(res=>{
+    modalResRef.current=res;setModal({title,message:msg,btnText:btn});
+  }),[]);
+  const onOk=useCallback(()=>{setModal(null);modalResRef.current?.(true)},[]);
+  const onNo=useCallback(()=>{setModal(null);modalResRef.current?.(false)},[]);
+
+  const togSec=useCallback(id=>{setCollapsed(p=>{const n={...p,[id]:!p[id]};localStorage.setItem('lb_collapsed',JSON.stringify(n));return n})},[]);
+
+  /* ─── Load state (polling) ─── */
+  const loadState=useCallback(async(auto=false)=>{
+    try{
+      const st=await api('/admin/api/state');setLbState(st);
+      try{setFullTokens(await api('/admin/api/tokens'))}catch{setFullTokens([])}
+      setConnected(true);
+    }catch(err){setConnected(false);if(!auto)toast('Fehler: '+err.message,'error')}
+  },[api,toast]);
+
+  useEffect(()=>{loadState();const iv=setInterval(()=>loadState(true),5000);return()=>clearInterval(iv)},[loadState]);
+  useEffect(()=>{const iv=setInterval(()=>setTick(Date.now()),500);return()=>clearInterval(iv)},[]);
+
+  /* ─── Keyboard ─── */
+  useEffect(()=>{
+    const h=e=>{
+      const tag=document.activeElement?.tagName;
+      if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return;
+      const k=e.key.toLowerCase();
+      if(k==='r'){e.preventDefault();loadState();}
+      else if(k==='?'){e.preventDefault();setShowSC(p=>!p);}
+      else if(k==='escape'){setShowSC(false);setSelected(null);}
+      else if(k==='/'){e.preventDefault();document.querySelector('.s-wrap input')?.focus();}
+    };
+    window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);
+  },[loadState]);
+
+  /* ─── Canvas interaction ─── */
+  useEffect(()=>{
+    const move=e=>{
+      if(panRef.current){
+        setPan({x:panRef.current.px+(e.clientX-panRef.current.sx),y:panRef.current.py+(e.clientY-panRef.current.sy)});
+      }
+      if(dragRef.current){
+        const z=zoomSt.current;
+        const dx=(e.clientX-dragRef.current.sx)/z,dy=(e.clientY-dragRef.current.sy)/z;
+        dragRef.current.moved=Math.abs(dx)>2||Math.abs(dy)>2;
+        dragRef.current.cx=dragRef.current.ox+dx;dragRef.current.cy=dragRef.current.oy+dy;
+        dragRef.current.el.style.left=dragRef.current.cx+'px';
+        dragRef.current.el.style.top=dragRef.current.cy+'px';
+        setTick(Date.now());
+      }
+      if(wireRef.current){
+        const cr=cvRef.current?.getBoundingClientRect();if(!cr)return;
+        const p=panSt.current,z=zoomSt.current;
+        setTempWire({x1:wireRef.current.x1,y1:wireRef.current.y1,x2:(e.clientX-cr.left-p.x)/z,y2:(e.clientY-cr.top-p.y)/z});
+      }
+    };
+    const up=e=>{
+      if(panRef.current)panRef.current=null;
+      if(dragRef.current){
+        const d=dragRef.current;
+        if(d.moved){
+          const x=d.cx,y=d.cy;
+          if(d.type==='incoming'&&d.id)api(`/admin/api/incoming-blocks/${d.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+          else if(d.type==='client-token'&&d.id)api(`/admin/api/tokens/${d.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+          else if(d.type==='endpoint'&&d.id)api(`/admin/api/endpoints/${d.id}`,{method:'PATCH',body:JSON.stringify({pos_x:x,pos_y:y})}).catch(()=>{});
+        }else if(d.type==='endpoint'&&d.id){setSelected(prev=>prev===d.id?null:d.id)}
+        dragRef.current=null;
+      }
+      if(wireRef.current){
+        const tgt=document.elementFromPoint(e.clientX,e.clientY);
+        const port=tgt?.closest('.port-in');
+        if(port){const nd=port.closest('.node');const eid=nd?.dataset?.eid;if(eid)toggleConn(parseInt(eid),true)}
+        wireRef.current=null;setTempWire(null);
+      }
+    };
+    document.addEventListener('mousemove',move);document.addEventListener('mouseup',up);
+    return()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up)};
+  },[api]);
+
+  const cvDown=useCallback(e=>{
+    if(e.target.closest('.node')||e.target.closest('.port')||e.target.closest('.zctrl')||e.target.closest('.zinfo'))return;
+    panRef.current={sx:e.clientX,sy:e.clientY,px:panSt.current.x,py:panSt.current.y};
+  },[]);
+
+  const nodeDown=useCallback((e,type,id)=>{
+    if(e.target.closest('.port'))return;
+    e.stopPropagation();e.preventDefault();
+    const el=e.currentTarget;
+    dragRef.current={el,type,id:parseInt(id),sx:e.clientX,sy:e.clientY,ox:el.offsetLeft,oy:el.offsetTop,cx:el.offsetLeft,cy:el.offsetTop,moved:false};
+  },[]);
+
+  const portDown=useCallback((e,block)=>{
+    e.stopPropagation();e.preventDefault();
+    wireRef.current={x1:block.pos_x+NW.inc,y1:block.pos_y+NH.inc/2};
+  },[]);
+
+  const onWheel=useCallback(e=>{
+    e.preventDefault();
+    const cr=cvRef.current?.getBoundingClientRect();if(!cr)return;
+    const mx=e.clientX-cr.left,my=e.clientY-cr.top;
+    const d=e.deltaY>0?-0.08:0.08;
+    setZoom(z=>{
+      const nz=Math.min(2,Math.max(0.3,z+d));
+      const ratio=nz/z;
+      setPan(p=>({x:mx-(mx-p.x)*ratio,y:my-(my-p.y)*ratio}));
+      return nz;
+    });
+  },[]);
+
+  const resetView=useCallback(()=>{setPan({x:0,y:0});setZoom(1)},[]);
+
+  /* ─── API actions ─── */
+  const toggleConn=useCallback(async(id,conn)=>{
+    try{await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify({connected:conn})});toast(conn?'Endpoint verbunden':'Endpoint getrennt','info');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const createEp=useCallback(async data=>{
+    setLoading(true);
+    try{await api('/admin/api/endpoints',{method:'POST',body:JSON.stringify(data)});toast(`Endpoint "${data.name}" erstellt`,'success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const saveEp=useCallback(async(id,data)=>{
+    setLoading(true);
+    try{await api(`/admin/api/endpoints/${id}`,{method:'PATCH',body:JSON.stringify(data)});toast('Endpoint gespeichert','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const deleteEp=useCallback(async id=>{
+    const ep=lbState?.endpoints?.find(e=>e.id===id);
+    const ok=await confirm('Endpoint l\u00f6schen',`Endpoint "${ep?.name||id}" l\u00f6schen?`,'L\u00f6schen');
+    if(!ok)return;setLoading(true);
+    try{await api(`/admin/api/endpoints/${id}`,{method:'DELETE'});if(selected===id)setSelected(null);toast('Endpoint gel\u00f6scht','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState,lbState,selected]);
+
+  const setRouting=useCallback(async mode=>{
+    try{await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({routing_mode:mode})});toast('Routing: '+(mode==='priority'?'Priorit\u00e4t':'Prozentual'),'success');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const setPrioInput=useCallback(async tid=>{
+    try{await api('/admin/api/routing',{method:'PATCH',body:JSON.stringify({priority_input_token_id:parseInt(tid)||0})});loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,loadState]);
+
+  const resetStats=useCallback(async()=>{
+    const ok=await confirm('Stats zur\u00fccksetzen','Alle Statistiken werden zur\u00fcckgesetzt.','Zur\u00fccksetzen');
+    if(!ok)return;setLoading(true);
+    try{await api('/admin/api/reset-stats',{method:'POST'});toast('Stats zur\u00fcckgesetzt','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState]);
+
+  const createIncBlock=useCallback(async(name,px,py)=>{
+    setLoading(true);
+    try{await api('/admin/api/incoming-blocks',{method:'POST',body:JSON.stringify({name,pos_x:px||256,pos_y:py||300})});toast(`Block "${name}" erstellt`,'success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const saveIncBlock=useCallback(async(id,name)=>{
+    try{await api(`/admin/api/incoming-blocks/${id}`,{method:'PATCH',body:JSON.stringify({name})});toast('Block gespeichert','success');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const deleteIncBlock=useCallback(async id=>{
+    const ok=await confirm('Block l\u00f6schen','Incoming-Block l\u00f6schen?','L\u00f6schen');
+    if(!ok)return;setLoading(true);
+    try{await api(`/admin/api/incoming-blocks/${id}`,{method:'DELETE'});toast('Block gel\u00f6scht','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState]);
+
+  const createClientTok=useCallback(async(name,token,ibid)=>{
+    setLoading(true);
+    try{await api('/admin/api/tokens',{method:'POST',body:JSON.stringify({name,token:token||null,incoming_block_id:ibid||null})});toast(`Token "${name}" erstellt`,'success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,toast,loadState]);
+
+  const saveTokRoute=useCallback(async(tid,patch)=>{
+    try{await api(`/admin/api/tokens/${tid}`,{method:'PATCH',body:JSON.stringify(patch)});toast('Route gespeichert','success');loadState()}
+    catch(err){toast(err.message,'error')}
+  },[api,toast,loadState]);
+
+  const deleteClientTok=useCallback(async tid=>{
+    const t=(fullTokens||[]).find(x=>x.id===tid);
+    const ok=await confirm('Token l\u00f6schen',`Token "${t?.name||tid}" l\u00f6schen?`,'L\u00f6schen');
+    if(!ok)return;setLoading(true);
+    try{await api(`/admin/api/tokens/${tid}`,{method:'DELETE'});toast('Token gel\u00f6scht','success');loadState()}
+    catch(err){toast(err.message,'error')}finally{setLoading(false)}
+  },[api,confirm,toast,loadState,fullTokens]);
+
+  /* ─── Computed ─── */
+  const incBlocks=useMemo(()=>{
+    if(lbState?.incoming_blocks?.length)return lbState.incoming_blocks;
+    return[{id:1,name:'Incoming 1',pos_x:256,pos_y:300}];
+  },[lbState]);
+
+  const wires=useMemo(()=>{
+    if(!lbState)return[];const r=[];const eps=lbState.endpoints||[];const cts=lbState.client_tokens||[];
+    cts.forEach(ct=>{
+      const tgt=incBlocks.find(b=>b.id===ct.incoming_block_id)||incBlocks[0];if(!tgt)return;
+      r.push({x1:(ct.pos_x||80)+NW.ct,y1:(ct.pos_y||100)+NH.ct/2,x2:tgt.pos_x,y2:tgt.pos_y+NH.inc/2,type:'tok',active:true});
+    });
+    const totTok=eps.reduce((s,e)=>s+(e.completion_tokens_total||0),0);
+    incBlocks.forEach(ib=>{
+      eps.filter(e=>e.connected).forEach(ep=>{
+        const pct=totTok>0?((ep.completion_tokens_total||0)/totTok*100).toFixed(0)+'%':'\u2014';
+        r.push({x1:ib.pos_x+NW.inc,y1:ib.pos_y+NH.inc/2,x2:ep.pos_x||420,y2:(ep.pos_y||80)+NH.ep/2,type:'ep',active:(ep.inflight||0)>0,label:pct});
+      });
+    });
+    return r;
+  },[lbState,incBlocks,tick]);
+
+  const selEp=useMemo(()=>selected?lbState?.endpoints?.find(e=>e.id===selected):null,[lbState,selected]);
+  const totTok=useMemo(()=>(lbState?.endpoints||[]).reduce((s,e)=>s+(e.completion_tokens_total||0),0),[lbState]);
+  const filteredToks=useMemo(()=>{
+    const q=tokSearch.toLowerCase();const list=fullTokens||[];
+    return q?list.filter(t=>t.name.toLowerCase().includes(q)||t.token.toLowerCase().includes(q)):list;
+  },[fullTokens,tokSearch]);
+
+  /* ═══ RENDER ═══ */
+  return <>
+    {/* Header */}
+    <div className="hdr">
+      <div className="logo">{'\u26a1'} HPE LB Admin <span className="badge">v{lbState?.version||'4'}</span></div>
+      <div className="sep"/>
+      <input type="password" value={adminToken} onChange={e=>setAdminToken(e.target.value)} placeholder="Admin Token\u2026" aria-label="Admin Token"/>
+      <div className="sep"/>
+      <label style={{fontSize:12,color:'var(--muted)'}}>Routing:</label>
+      <select value={lbState?.routing_mode||'percentage'} onChange={e=>setRouting(e.target.value)}>
+        <option value="percentage">Prozentual</option><option value="priority">Priorit&auml;t</option>
+      </select>
+      {lbState?.routing_mode==='priority'&&<>
+        <label style={{fontSize:12,color:'var(--muted)'}}>Prio-Eingang:</label>
+        <select value={String(lbState?.priority_input_token_id||0)} onChange={e=>setPrioInput(e.target.value)}>
+          <option value="0">(kein)</option>
+          {(lbState?.client_tokens||[]).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </>}
+      <div className="sep"/>
+      <button onClick={()=>loadState()} title="Aktualisieren (R)">{'\u27f3'}</button>
+      <button style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={resetStats}>Stats Reset</button>
+      <div style={{flex:1}}/>
+      <div className={`dot ${connected?'on':'off'}`} title={connected?'Verbunden':'Getrennt'}/>
+      <span style={{fontSize:11,color:'var(--muted)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{connected?'Verbunden':'Getrennt'}</span>
+      <span style={{fontSize:10,color:'var(--muted)',padding:'2px 6px',border:'1px solid var(--border)',borderRadius:4,cursor:'pointer'}} onClick={()=>setShowSC(true)}>{'\u2328'} Shortcuts</span>
+      {user&&<div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',border:'1px solid var(--border)',borderRadius:'var(--r)',background:'#FFF',cursor:'pointer',fontSize:12,color:'var(--text)'}} onClick={onLogout} title="Abmelden">
+        <span>{'\U0001f464'}</span><span style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.email}</span>
+      </div>}
+    </div>
+
+    <div className="main">
+      {/* Canvas */}
+      <div className={`canvas ${panRef.current?'panning':''}`} ref={cvRef} onMouseDown={cvDown} onWheel={onWheel}>
+        <div className="grid" style={{backgroundPosition:`${pan.x%24}px ${pan.y%24}px`}}/>
+        <div className="world" style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,transformOrigin:'0 0'}}>
+          <svg className="wires" width="6000" height="6000">
+            {wires.map((w,i)=><g key={i}>
+              <path d={bez(w.x1,w.y1,w.x2,w.y2)} className={`wire ${w.active?'active':''} ${w.type==='tok'?'wire-tok':''}`}/>
+              {w.label&&<text x={(w.x1+w.x2)/2} y={(w.y1+w.y2)/2-10} className="wire-lbl" textAnchor="middle">{w.label}</text>}
+            </g>)}
+            {tempWire&&<path d={bez(tempWire.x1,tempWire.y1,tempWire.x2,tempWire.y2)} className="wire wire-temp"/>}
+          </svg>
+
+          {(lbState?.client_tokens||[]).map(ct=><div key={`ct-${ct.id}`} className="node node-ct"
+            style={{left:ct.pos_x||80,top:ct.pos_y||100}} onMouseDown={e=>nodeDown(e,'client-token',ct.id)}>
+            <div className="nhead"><span className="ico">{'\U0001f511'}</span> {ct.name}</div>
+            <div className="nbody">
+              <div className="nrow"><span>Requests</span><span className="v">{ct.total_requests||0}</span></div>
+              <div className="nrow"><span>Req/s</span><span className="v">{ct.requests_per_second||0}</span></div>
+              <div className="nrow"><span>P-Tok</span><span className="v">{(ct.prompt_tokens_total||0).toLocaleString()}</span></div>
+              <div className="nrow"><span>C-Tok</span><span className="v">{(ct.completion_tokens_total||0).toLocaleString()}</span></div>
+            </div>
+            <div className="port port-out conn" style={{background:'var(--hpe-purple)'}}/>
+          </div>)}
+
+          {incBlocks.map(ib=><div key={`ib-${ib.id}`} className="node node-inc"
+            style={{left:ib.pos_x,top:ib.pos_y}} onMouseDown={e=>nodeDown(e,'incoming',ib.id)}>
+            <div className="nhead"><span className="ico">{'\u26a1'}</span> {ib.name}</div>
+            <div className="nbody">
+              <div className="nrow"><span>In-Flight</span><span className="v">{lbState?.stats?.total_inflight||0}</span></div>
+              <div className="nrow"><span>Req/s</span><span className="v">{lbState?.stats?.requests_per_second||0}</span></div>
+              <div className="nrow"><span>Token/s</span><span className="v">{lbState?.stats?.tokens_per_second||0}</span></div>
+            </div>
+            <div className="port port-in conn" style={{pointerEvents:'none'}}/>
+            <div className="port port-out" title="Ziehen zum Verbinden" onMouseDown={e=>portDown(e,ib)}/>
+          </div>)}
+
+          {(lbState?.endpoints||[]).map(ep=>{
+            const aPct=totTok>0?((ep.completion_tokens_total||0)/totTok*100).toFixed(1):'0.0';
+            const ok=ep.enabled&&(ep.cooldown_remaining_s||0)<=0;
+            const tps=lbState?.stats?.tokens_per_second>0&&totTok>0?((ep.completion_tokens_total||0)/totTok*lbState.stats.tokens_per_second).toFixed(1):'0';
+            const sr=ep.total_requests>0?((ep.total_success/ep.total_requests)*100).toFixed(0)+'%':'\u2014';
+            return <div key={`ep-${ep.id}`} className={`node node-ep ${selected===ep.id?'sel':''}`}
+              data-eid={ep.id} style={{left:ep.pos_x||420,top:ep.pos_y||80}} onMouseDown={e=>nodeDown(e,'endpoint',ep.id)}>
+              <div className="nhead">
+                <span className="ico">{ep.connected?'\U0001f7e2':'\u26aa'}</span> {ep.name}
+                {!ep.enabled?<span className="pill pill-off">AUS</span>
+                  :ep.cooldown_remaining_s>0?<span className="pill pill-warn">COOLDOWN</span>
+                  :<span className="pill pill-ok">OK</span>}
+              </div>
+              <div className="nbody">
+                <div className="nrow"><span>Quota</span><span className="v">{ep.token_quota_percent}%</span></div>
+                <div className="nrow"><span>Ist</span><span className="v">{aPct}%</span></div>
+                <div className="nbar"><div className="fill" style={{width:`${Math.min(100,aPct)}%`,background:ok?'var(--accent)':'var(--err)'}}/></div>
+                <div className="nrow"><span>In-Flight</span><span className="v">{ep.inflight||0}</span></div>
+                <div className="nrow"><span>Token/s</span><span className="v">{tps}</span></div>
+                <div className="nrow"><span>Latenz</span><span className="v">{(ep.avg_latency_ms||0).toFixed(0)}ms</span></div>
+                <div className="nrow"><span>Erfolg</span><span className="v">{sr}</span></div>
+                <div className="nrow"><span>Prio</span><span className="v">#{ep.priority_order}</span></div>
+              </div>
+              <div className={`port port-in ${ep.connected?'conn':''}`}
+                title={ep.connected?'Klick zum Trennen':'Nicht verbunden'}
+                onMouseDown={e=>{e.stopPropagation();toggleConn(ep.id,!ep.connected)}}/>
+            </div>;
+          })}
+        </div>
+
+        <div className="zctrl">
+          <button onClick={()=>setZoom(z=>Math.max(.3,z-.1))} title="Verkleinern">{'\u2212'}</button>
+          <button onClick={resetView} title="Zur\u00fccksetzen">{'\u2299'}</button>
+          <button onClick={()=>setZoom(z=>Math.min(2,z+.1))} title="Vergr\u00f6\u00dfern">+</button>
+        </div>
+        <div className="zinfo">{(zoom*100).toFixed(0)}% | Pan: {pan.x.toFixed(0)}, {pan.y.toFixed(0)}</div>
+      </div>
+
+      {/* Sidebar */}
+      <div className="sidebar">
+        {selEp?<div className="sb-sec"><h3>Endpoint Details</h3>
+          <EndpointDetail ep={selEp} totalTok={totTok} onSave={saveEp} onDelete={deleteEp} onToggle={toggleConn} toast={toast}/>
+        </div>
+        :<div className="sb-sec"><h3>Info</h3>
+          <p style={{fontSize:12,color:'var(--muted)',lineHeight:1.5}}>Klicke auf einen Endpoint-Knoten, um Details zu sehen.
+          Ziehe vom <b>Ausgang</b> eines Incoming-Knotens zu einem <b>Eingang</b> eines Endpoints.
+          <br/><br/>{'\u26a1'} <b>Canvas verschieben:</b> Leere Fl\u00e4che ziehen &middot; <b>Zoom:</b> Scrollrad
+          <br/><br/>{'\u270f\ufe0f'} Formulare werden beim Polling <b>nicht \u00fcberschrieben</b>, solange ungespeicherte \u00c4nderungen vorliegen.</p>
+        </div>}
+
+        <Sec id="addEp" title="+ Endpoint hinzuf\u00fcgen" collapsed={collapsed} onToggle={togSec}>
+          <AddEpForm onSubmit={createEp} epCount={(lbState?.endpoints||[]).length}/>
+        </Sec>
+
+        <Sec id="inc" title="Incoming-Bl\u00f6cke" collapsed={collapsed} onToggle={togSec}>
+          <IncBlockList blocks={incBlocks} tokens={fullTokens} onCreate={createIncBlock} onSave={saveIncBlock} onDelete={deleteIncBlock}/>
+        </Sec>
+
+        <Sec id="tok" title="Client-Zugang" collapsed={collapsed} onToggle={togSec}>
+          <p style={{fontSize:11,color:'var(--muted)',wordBreak:'break-all',marginBottom:8}}>
+            Base-URL: <span style={{color:'var(--text)'}}>{typeof location!=='undefined'?location.origin+'/v1':'\u2014'}</span>
+          </p>
+          {(fullTokens||[]).length>3&&<div className="s-wrap">
+            <span className="s-ico">{'\U0001f50d'}</span>
+            <input value={tokSearch} onChange={e=>setTokSearch(e.target.value)} placeholder="Token suchen\u2026"/>
+          </div>}
+          <ClientTokenList tokens={filteredToks} endpoints={lbState?.endpoints||[]} incomingBlocks={incBlocks} onSaveRoute={saveTokRoute} onDelete={deleteClientTok} toast={toast}/>
+          <div style={{marginTop:10,borderTop:'1px solid var(--border-light)',paddingTop:10}}>
+            <AddTokenForm incomingBlocks={incBlocks} onSubmit={createClientTok}/>
+          </div>
+        </Sec>
+      </div>
+    </div>
+
+    {/* Footer */}
+    <div className="footer">
+      <div className="m">Token/s: <span className="n">{lbState?.stats?.tokens_per_second||0}</span></div>
+      <div className="m">Req/s: <span className="n">{lbState?.stats?.requests_per_second||0}</span></div>
+      <div className="m">In-Flight: <span className={`n ${(lbState?.stats?.total_inflight||0)>50?'c':(lbState?.stats?.total_inflight||0)>20?'w':''}`}>{lbState?.stats?.total_inflight||0}</span></div>
+      <div className="m">Endpoints: <span className="n">{(lbState?.endpoints||[]).length}</span></div>
+      <div className="m">Verbunden: <span className="n">{(lbState?.endpoints||[]).filter(e=>e.connected).length}</span></div>
+      <div className="m">Modus: <span className="n">{lbState?.routing_mode==='priority'?'Priorit\u00e4t':'Prozentual'}</span></div>
+      <span className="rts">{'\u27f3'} {new Date().toLocaleTimeString('de-DE',{hour12:false})}</span>
+    </div>
+
+    <Toasts items={toasts} onRemove={rmToast}/>
+    <ConfirmModal show={!!modal} title={modal?.title} message={modal?.message} btnText={modal?.btnText} onOk={onOk} onNo={onNo}/>
+    <ShortcutsOv show={showSC} onClose={()=>setShowSC(false)}/>
+    {loading&&<div className="ld-ov"><div className="spinner"/></div>}
+  </>;
+}
+
+/* ═══ App with Auth Gate ═══ */
+function App(){
+  const [sbCfg,setSbCfg]=useState(null);
+  const [sbClient,setSbClient]=useState(null);
+  const [user,setUser]=useState(null);
+  const [ready,setReady]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const r=await fetch('/admin/api/config');
+        const cfg=await r.json();
+        setSbCfg(cfg);
+        if(cfg.supabase_url&&cfg.supabase_anon_key){
+          const client=window.supabase.createClient(cfg.supabase_url,cfg.supabase_anon_key);
+          setSbClient(client);
+          const{data:{session}}=await client.auth.getSession();
+          if(session?.user)setUser(session.user);
+          client.auth.onAuthStateChange((_,s)=>{setUser(s?.user||null)});
+        }
+      }catch(e){console.warn('Config fetch failed:',e)}
+      setReady(true);
+    })();
+  },[]);
+
+  const logout=useCallback(async()=>{
+    if(sbClient)await sbClient.auth.signOut();
+    setUser(null);
+  },[sbClient]);
+
+  if(!ready)return <div className="ld-ov"><div className="spinner"/></div>;
+  if(sbClient&&!user)return <LoginScreen sbClient={sbClient} onLogin={setUser}/>;
+  return <AdminApp user={user} sbClient={sbClient} onLogout={logout}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+</script>
+</body>
+</html>

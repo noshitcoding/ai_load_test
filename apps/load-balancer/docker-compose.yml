@@ -1,0 +1,44 @@
+services:
+  load-balancer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./data:/data
+    environment:
+      LB_PORT: "8090"
+      LB_DB_PATH: "/data/load_balancer.db"
+      LB_ADMIN_TOKEN: "${LB_ADMIN_TOKEN:-change-me-admin-token}"
+      LB_CLIENT_TOKENS: "${LB_CLIENT_TOKENS:-}"
+      LB_FAIL_THRESHOLD: "3"
+      LB_COOLDOWN_SECONDS: "20"
+      LB_MAX_CONNECTIONS: "500"
+      LB_MAX_KEEPALIVE: "200"
+      LB_DEFAULT_TIMEOUT_SECONDS: "120"
+      LB_LOG_LEVEL: "INFO"
+      LB_CORS_ORIGINS: "${LB_CORS_ORIGINS:-*}"
+      LB_CACHE_MAX_ENTRIES: "${LB_CACHE_MAX_ENTRIES:-5000}"
+      LB_CACHE_TTL_SECONDS: "${LB_CACHE_TTL_SECONDS:-300}"
+      LB_ADMIN_RATE_LIMIT_RPM: "${LB_ADMIN_RATE_LIMIT_RPM:-300}"
+      LB_MAX_REQUEST_BODY_BYTES: "${LB_MAX_REQUEST_BODY_BYTES:-10485760}"
+      LB_DRAIN_TIMEOUT_SECONDS: "${LB_DRAIN_TIMEOUT_SECONDS:-30}"
+      SUPABASE_URL: "${SUPABASE_URL:-}"
+      SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY:-}"
+      SUPABASE_ADMIN_EMAIL: "${SUPABASE_ADMIN_EMAIL:-Admin@hpe.com}"
+      SUPABASE_ADMIN_PASSWORD: "${SUPABASE_ADMIN_PASSWORD:-AdminAdmin}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;resp=urllib.request.urlopen('http://127.0.0.1:8090/health',timeout=3);sys.exit(0 if resp.status<500 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
